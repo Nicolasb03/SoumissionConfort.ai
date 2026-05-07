@@ -287,8 +287,13 @@ export class MetaConversionAPI {
         data: [event]
       };
 
-      if (this.testEventCode) {
+      // Guard: ignore test_event_code in production. A misconfigured prod env
+      // var here silently routes all CAPI events to Meta's test stream, which
+      // breaks pixel attribution and ad optimization (incident 2026-05-07).
+      if (this.testEventCode && process.env.NODE_ENV !== 'production') {
         payload.test_event_code = this.testEventCode;
+      } else if (this.testEventCode) {
+        console.warn('⚠️ Meta CAPI: test_event_code set in production env — ignored. Remove META_TEST_EVENT_CODE from prod.');
       }
 
       const response = await fetch(`https://graph.facebook.com/v18.0/${this.pixelId}/events`, {
