@@ -13,7 +13,8 @@
 // Flag: process.env.GHL_ENABLED === 'true'
 // Required env (HVAC):     GHL_API_KEY,     GHL_LOCATION_ID
 // Required env (Iso):      GHL_API_KEY_ISO, GHL_LOCATION_ID_ISO
-// Rate limit: GHL allows ~100 req / 10s per location. Each lead = 1-2 calls.
+// Rate limit: GHL allows ~100 req / 10s per location. Each lead = 1-3 calls
+// (upsert + optional note + optional tag via /api/leads/update).
 import { GHL_FIELDS_HVAC } from './ghl-fields-hvac'
 import { GHL_FIELDS_ISO } from './ghl-fields-iso'
 import type { GHLFieldDef, LeadVertical } from './ghl-fields'
@@ -112,7 +113,15 @@ function buildContactPayload(
   const push = (key: string, value: unknown) => {
     if (value === undefined || value === null || value === '') return
     const def = fields[key]
-    if (def) customFields.push({ id: def.id, field_value: value })
+    if (def) {
+      customFields.push({ id: def.id, field_value: value })
+    } else {
+      // Surface typos / missing field mappings in logs so we catch them in
+      // preview before they silently lose data in prod.
+      console.warn(
+        `[ghl-client] dropping custom field "${key}" — no mapping for vertical=${lead.vertical}`,
+      )
+    }
   }
 
   // Map UTM/attribution to known GHL fields
@@ -265,13 +274,20 @@ export async function postLeadToGHL(lead: NormalizedLead): Promise<GHLPostResult
  * Look up a GHL contact by email in the sub-account selected by `vertical`.
  * Returns the first match or null. Used by /api/leads/update which only
  * serves the isolation funnel (default vertical='isolation').
+ *
+ * Throws when GHL credentials are missing for the vertical — this is a
+ * misconfig (not a normal "no match" case), and silently returning null
+ * would route prod calls to a no-op success path.
  */
 export async function findGHLContactByEmail(
   email: string,
   vertical: LeadVertical = 'isolation',
 ): Promise<{ id: string } | null> {
   const { apiKey, locationId } = getGHLConfig(vertical)
-  if (!apiKey || !locationId || !email) return null
+  if (!apiKey || !locationId) {
+    throw new Error(`GHL credentials missing for vertical=${vertical} (lookup)`)
+  }
+  if (!email) return null
   const res = await ghlRequest<{ contact: { id: string } | null; contacts?: { id: string }[] }>(
     apiKey,
     `/contacts/search/duplicate?locationId=${locationId}&email=${encodeURIComponent(email)}`,
@@ -293,7 +309,10 @@ export async function appendGHLNote(
   vertical: LeadVertical = 'isolation',
 ): Promise<boolean> {
   const { apiKey } = getGHLConfig(vertical)
-  if (!apiKey || !contactId) return false
+  if (!apiKey) {
+    throw new Error(`GHL credentials missing for vertical=${vertical} (note)`)
+  }
+  if (!contactId) return false
   const res = await ghlRequest(apiKey, `/contacts/${contactId}/notes`, {
     method: 'POST',
     body: JSON.stringify({ body }),
@@ -317,7 +336,10 @@ export async function addGHLContactTag(
   vertical: LeadVertical = 'isolation',
 ): Promise<boolean> {
   const { apiKey } = getGHLConfig(vertical)
-  if (!apiKey || !contactId || !tag) return false
+  if (!apiKey) {
+    throw new Error(`GHL credentials missing for vertical=${vertical} (tag)`)
+  }
+  if (!contactId || !tag) return false
   const res = await ghlRequest(apiKey, `/contacts/${contactId}/tags`, {
     method: 'POST',
     body: JSON.stringify({ tags: [tag] }),
