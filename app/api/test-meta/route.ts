@@ -3,8 +3,18 @@ import { initializeMeta, isMetaConfigured } from "@/lib/meta-config"
 import { trackLead, trackViewContent } from "@/lib/meta-conversion-api"
 
 export async function POST(request: NextRequest) {
+  // Test endpoints are dev-only utilities. Block in production so the public
+  // URL can't be used to inject fake leads ("test@example.com") into the live
+  // Meta attribution stream.
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { error: 'Test endpoints are disabled in production' },
+      { status: 403 },
+    )
+  }
+
   console.log('🧪 META TEST ENDPOINT CALLED')
-  
+
   try {
     // Initialize Meta Conversion API
     initializeMeta()

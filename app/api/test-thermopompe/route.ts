@@ -2,8 +2,18 @@ import { type NextRequest, NextResponse } from "next/server"
 import { initializeMetaConversionAPI } from "@/lib/meta-conversion-api"
 
 export async function GET(request: NextRequest) {
+  // Test endpoints are dev-only utilities. Block in production so the public
+  // URL can't be used to inject fake leads ("test@example.com") into the live
+  // Meta attribution stream.
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { error: 'Test endpoints are disabled in production' },
+      { status: 403 },
+    )
+  }
+
   console.log('🧪 TEST THERMOPOMPE: Starting test event')
-  
+
   try {
     const metaPixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID
     const metaAccessToken = process.env.META_CONVERSION_ACCESS_TOKEN
