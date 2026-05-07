@@ -5,16 +5,24 @@
 // for the lead entry; the qualification webhook (GHL stage "Qualifié" → Make
 // → LeadProsper) is configured in the GHL workflow, not here.
 //
+// Multi-tenant: dispatch by `vertical` so iso leads (iso/rapide/subvention)
+// land in the "Soumission Confort Iso" sub-account while HVAC stays in the
+// legacy "Powerflow Leads" sub-account. Custom field IDs are per-location, so
+// each sub-account has its own field map.
+//
 // Flag: process.env.GHL_ENABLED === 'true'
-// Required env: GHL_API_KEY, GHL_LOCATION_ID
-// Rate limit: GHL allows ~100 req / 10s per location. Each lead = 2 calls
-// (create contact + create opportunity), well under the limit.
-import { GHL_FIELDS } from './ghl-fields'
+// Required env (HVAC):     GHL_API_KEY,     GHL_LOCATION_ID
+// Required env (Iso):      GHL_API_KEY_ISO, GHL_LOCATION_ID_ISO
+// Rate limit: GHL allows ~100 req / 10s per location. Each lead = 1-3 calls
+// (upsert + optional note + optional tag via /api/leads/update).
+import { GHL_FIELDS_HVAC } from './ghl-fields-hvac'
+import { GHL_FIELDS_ISO } from './ghl-fields-iso'
+import type { GHLFieldDef, LeadVertical } from './ghl-fields'
+
+export type { LeadVertical } from './ghl-fields'
 
 const GHL_BASE = 'https://services.leadconnectorhq.com'
 const GHL_VERSION = '2021-07-28'
-
-export type LeadVertical = 'isolation' | 'hvac' | 'subvention' | 'isolation_soumission_rapide' | 'roofing'
 
 export interface NormalizedLead {
   vertical: LeadVertical
@@ -38,7 +46,7 @@ export interface NormalizedLead {
   landingPage?: string
   leadSource?: string
   // Vertical-specific custom fields (best-effort; absent fields silently dropped)
-  custom?: Partial<Record<keyof typeof GHL_FIELDS, unknown>>
+  custom?: Record<string, unknown>
   // Optional: stamp for traceability inside GHL
   internalLeadId?: string
   // Optional notes appended on creation
@@ -69,28 +77,66 @@ const VERTICAL_TAG: Record<LeadVertical, string> = {
   hvac: 'Lead HVAC',
 }
 
+interface GHLConfig {
+  apiKey?: string
+  locationId?: string
+  fields: Record<string, GHLFieldDef>
+}
+
+// Dispatch GHL credentials + field map by lead vertical.
+// HVAC/roofing → legacy "Powerflow Leads". Everything else → new iso sub-account.
+function getGHLConfig(vertical: LeadVertical): GHLConfig {
+  if (vertical === 'hvac' || vertical === 'roofing') {
+    return {
+      apiKey: process.env.GHL_API_KEY,
+      locationId: process.env.GHL_LOCATION_ID,
+      fields: GHL_FIELDS_HVAC,
+    }
+  }
+  return {
+    apiKey: process.env.GHL_API_KEY_ISO,
+    locationId: process.env.GHL_LOCATION_ID_ISO,
+    fields: GHL_FIELDS_ISO,
+  }
+}
+
 export function isGHLEnabled(): boolean {
   return process.env.GHL_ENABLED === 'true'
 }
 
-function buildContactPayload(lead: NormalizedLead, locationId: string): GHLContactPayload {
+function buildContactPayload(
+  lead: NormalizedLead,
+  locationId: string,
+  fields: Record<string, GHLFieldDef>,
+): GHLContactPayload {
   const customFields: { id: string; field_value: unknown }[] = []
+  const push = (key: string, value: unknown) => {
+    if (value === undefined || value === null || value === '') return
+    const def = fields[key]
+    if (def) {
+      customFields.push({ id: def.id, field_value: value })
+    } else {
+      // Surface typos / missing field mappings in logs so we catch them in
+      // preview before they silently lose data in prod.
+      console.warn(
+        `[ghl-client] dropping custom field "${key}" — no mapping for vertical=${lead.vertical}`,
+      )
+    }
+  }
 
   // Map UTM/attribution to known GHL fields
-  if (lead.utmSource) customFields.push({ id: GHL_FIELDS.utm_source.id, field_value: lead.utmSource })
-  if (lead.utmCampaign) customFields.push({ id: GHL_FIELDS.campaign_name.id, field_value: lead.utmCampaign })
-  if (lead.utmContent) customFields.push({ id: GHL_FIELDS.ad_name.id, field_value: lead.utmContent })
-  if (lead.fbclid) customFields.push({ id: GHL_FIELDS.fbclid.id, field_value: lead.fbclid })
-  if (lead.landingPage) customFields.push({ id: GHL_FIELDS.landing_page.id, field_value: lead.landingPage })
-  if (lead.leadSource) customFields.push({ id: GHL_FIELDS.lead_source.id, field_value: lead.leadSource })
-  if (lead.city) customFields.push({ id: GHL_FIELDS.ville.id, field_value: lead.city })
-  if (lead.postalCode) customFields.push({ id: GHL_FIELDS.code_postal.id, field_value: lead.postalCode })
+  push('utm_source', lead.utmSource)
+  push('campaign_name', lead.utmCampaign)
+  push('ad_name', lead.utmContent)
+  push('fbclid', lead.fbclid)
+  push('landing_page', lead.landingPage)
+  push('lead_source', lead.leadSource)
+  push('ville', lead.city)
+  push('code_postal', lead.postalCode)
 
-  // Vertical-specific fields — silently skip ones not in GHL_FIELDS to avoid breaking deploys
+  // Vertical-specific fields — silently skip ones not in the map
   for (const [key, value] of Object.entries(lead.custom ?? {})) {
-    if (value === undefined || value === null || value === '') continue
-    const def = (GHL_FIELDS as Record<string, { id: string }>)[key]
-    if (def) customFields.push({ id: def.id, field_value: value })
+    push(key, value)
   }
 
   return {
@@ -170,26 +216,26 @@ export interface GHLPostResult {
 }
 
 /**
- * Push a lead to GHL "Powerflow Leads". Creates the contact (or surfaces the
- * duplicate id) and returns enough info for the caller to log/return.
+ * Push a lead to the GHL sub-account selected by `lead.vertical`. Creates the
+ * contact (or surfaces the duplicate id) and returns enough info for the
+ * caller to log/return.
  *
  * Tags drive the GHL workflows ("Lead Optin Toiture/Iso/HVAC") which create
  * the opportunity in the right pipeline + stage and notify Slack/setters.
  * The route does NOT need to call /opportunities directly.
  */
 export async function postLeadToGHL(lead: NormalizedLead): Promise<GHLPostResult> {
-  const apiKey = process.env.GHL_API_KEY
-  const locationId = process.env.GHL_LOCATION_ID
+  const { apiKey, locationId, fields } = getGHLConfig(lead.vertical)
   if (!apiKey || !locationId) {
     return {
       contactId: null,
       duplicate: false,
       contactStatus: 0,
-      contactError: 'GHL_API_KEY or GHL_LOCATION_ID not configured',
+      contactError: `GHL credentials missing for vertical=${lead.vertical}`,
     }
   }
 
-  const payload = buildContactPayload(lead, locationId)
+  const payload = buildContactPayload(lead, locationId, fields)
 
   // Use /contacts/upsert (vs /contacts/) so duplicates are merged into the
   // existing contact instead of returning 400/422. The endpoint returns
@@ -225,14 +271,23 @@ export async function postLeadToGHL(lead: NormalizedLead): Promise<GHLPostResult
 }
 
 /**
- * Look up a GHL contact by email. Returns the first match or null.
- * Used by /api/leads/update so we can attach a note (quote_request) to the
- * existing contact instead of creating a duplicate.
+ * Look up a GHL contact by email in the sub-account selected by `vertical`.
+ * Returns the first match or null. Used by /api/leads/update which only
+ * serves the isolation funnel (default vertical='isolation').
+ *
+ * Throws when GHL credentials are missing for the vertical — this is a
+ * misconfig (not a normal "no match" case), and silently returning null
+ * would route prod calls to a no-op success path.
  */
-export async function findGHLContactByEmail(email: string): Promise<{ id: string } | null> {
-  const apiKey = process.env.GHL_API_KEY
-  const locationId = process.env.GHL_LOCATION_ID
-  if (!apiKey || !locationId || !email) return null
+export async function findGHLContactByEmail(
+  email: string,
+  vertical: LeadVertical = 'isolation',
+): Promise<{ id: string } | null> {
+  const { apiKey, locationId } = getGHLConfig(vertical)
+  if (!apiKey || !locationId) {
+    throw new Error(`GHL credentials missing for vertical=${vertical} (lookup)`)
+  }
+  if (!email) return null
   const res = await ghlRequest<{ contact: { id: string } | null; contacts?: { id: string }[] }>(
     apiKey,
     `/contacts/search/duplicate?locationId=${locationId}&email=${encodeURIComponent(email)}`,
@@ -246,10 +301,18 @@ export async function findGHLContactByEmail(email: string): Promise<{ id: string
 /**
  * Append a free-form note to a GHL contact. Used by /api/leads/update when
  * the user clicks "demande soumission précise" from the pricing calculator.
+ * Default vertical='isolation' since the calculator is iso-only.
  */
-export async function appendGHLNote(contactId: string, body: string): Promise<boolean> {
-  const apiKey = process.env.GHL_API_KEY
-  if (!apiKey || !contactId) return false
+export async function appendGHLNote(
+  contactId: string,
+  body: string,
+  vertical: LeadVertical = 'isolation',
+): Promise<boolean> {
+  const { apiKey } = getGHLConfig(vertical)
+  if (!apiKey) {
+    throw new Error(`GHL credentials missing for vertical=${vertical} (note)`)
+  }
+  if (!contactId) return false
   const res = await ghlRequest(apiKey, `/contacts/${contactId}/notes`, {
     method: 'POST',
     body: JSON.stringify({ body }),
@@ -261,15 +324,22 @@ export async function appendGHLNote(contactId: string, body: string): Promise<bo
  * Add a tag to a GHL contact. Used to flag a lead as "Demande 3 soumissions"
  * when the client clicks the precise-quote CTA on the pricing calculator —
  * this triggers a downstream GHL workflow that moves the opportunity to the
- * "ask for 3 soumissions" stage.
+ * "ask for 3 soumissions" stage. Default vertical='isolation'.
  *
  * Endpoint: POST /contacts/{contactId}/tags
  * Body: { tags: [string, ...] }
  * Idempotent: GHL silently ignores duplicates if the tag is already present.
  */
-export async function addGHLContactTag(contactId: string, tag: string): Promise<boolean> {
-  const apiKey = process.env.GHL_API_KEY
-  if (!apiKey || !contactId || !tag) return false
+export async function addGHLContactTag(
+  contactId: string,
+  tag: string,
+  vertical: LeadVertical = 'isolation',
+): Promise<boolean> {
+  const { apiKey } = getGHLConfig(vertical)
+  if (!apiKey) {
+    throw new Error(`GHL credentials missing for vertical=${vertical} (tag)`)
+  }
+  if (!contactId || !tag) return false
   const res = await ghlRequest(apiKey, `/contacts/${contactId}/tags`, {
     method: 'POST',
     body: JSON.stringify({ tags: [tag] }),
