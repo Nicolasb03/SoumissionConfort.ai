@@ -31,7 +31,10 @@ export async function POST(request: NextRequest) {
           ghl: { skipped: true },
         })
       }
-      const contact = await findGHLContactByEmail(email)
+      // The pricing calculator is iso-only, so this route exclusively touches
+      // the iso sub-account. Pass vertical explicitly so the multi-tenant
+      // dispatcher hits the right credentials/location.
+      const contact = await findGHLContactByEmail(email, 'isolation')
       if (!contact) {
         console.warn('⚠️ LEAD UPDATE: GHL contact not found for', email)
         return NextResponse.json({
@@ -42,14 +45,14 @@ export async function POST(request: NextRequest) {
         })
       }
       const noteBody = `[${new Date().toISOString()}] Action: ${action} (leadId=${leadId})`
-      const ok = await appendGHLNote(contact.id, noteBody)
+      const ok = await appendGHLNote(contact.id, noteBody, 'isolation')
 
       // For "demande 3 soumissions" CTA: also tag the contact so a downstream
       // GHL workflow can move the opportunity to the "ask for 3 soumissions"
       // stage and notify the setter that this is a hot lead.
       let tagAdded = false
       if (action === PRECISE_QUOTE_ACTION) {
-        tagAdded = await addGHLContactTag(contact.id, DEMANDE_3_SOUMISSIONS_TAG)
+        tagAdded = await addGHLContactTag(contact.id, DEMANDE_3_SOUMISSIONS_TAG, 'isolation')
         console.log(`🔥 LEAD UPDATE: hot lead — tag '${DEMANDE_3_SOUMISSIONS_TAG}' added=${tagAdded}`)
       }
 

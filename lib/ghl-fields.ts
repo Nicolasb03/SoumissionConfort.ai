@@ -1,54 +1,27 @@
-export interface GHLFieldDef { id: string; name: string; key: string; type: string }
+// Barrel for GHL custom field maps. Each sub-account has its own field IDs;
+// dispatch by lead vertical so the right map is used at runtime.
+//
+//   - ghl-fields-hvac.ts → legacy "Powerflow Leads" sub-account (HVAC only)
+//   - ghl-fields-iso.ts  → "Soumission Confort Iso" sub-account (iso/rapide/subvention)
 
-export const GHL_FIELDS: Record<string, GHLFieldDef> = {
-  acces_entretoit: { id: 'PXssFa4x79h3SvhG1wU7', name: 'Acces entretoit', key: 'acces_entretoit', type: 'TEXT' },
-  ad_name: { id: '0XEUFGpcx6IAigZceBZz', name: 'Ad Name', key: 'ad_name', type: 'TEXT' },
-  age_du_toit: { id: 'htl72tA4VVMDUnwl3cCF', name: 'Age du toit', key: 'age_du_toit', type: 'SINGLE_OPTIONS' },
-  agent: { id: 'BxFapOF8cjYKeGG7CHQG', name: 'Agent', key: 'agent', type: 'SINGLE_OPTIONS' },
-  annee_de_construction: { id: 'ZYVPN3iPo5wpN9qcIYj5', name: 'Annee de construction', key: 'annee_de_construction', type: 'NUMERICAL' },
-  campaign_name: { id: 'lpl6CVD25KVtlFYUfBx7', name: 'Campaign Name', key: 'campaign_name', type: 'TEXT' },
-  code_postal: { id: 'K4Fuu2zNFeRgVsuoUm3P', name: 'Code Postal', key: 'code_postal', type: 'TEXT' },
-  condition_particuliere: { id: 'bJ9VsMVydyaniUaR7hJc', name: 'Condition particuliere', key: 'condition_particuliere', type: 'SINGLE_OPTIONS' },
-  econo__prix_max: { id: 'QFTp2Xbi5C8oeSGSyTgQ', name: 'Econo - Prix max', key: 'econo__prix_max', type: 'NUMERICAL' },
-  econo__prix_min: { id: 'hdPXxWVAINxAdwDtlSC6', name: 'Econo - Prix min', key: 'econo__prix_min', type: 'NUMERICAL' },
-  garage: { id: 'RYYbnMjmgkaGO5T8v7cv', name: 'Garage', key: 'garage', type: 'TEXT' },
-  hauteur_du_batiment: { id: 'PC5gP3CMiPqzwyGuEhsd', name: 'Hauteur du batiment', key: 'hauteur_du_batiment', type: 'NUMERICAL' },
-  isolation_actuelle: { id: 'GtYk8LeflRfZa4ZVyql0', name: 'Isolation actuelle', key: 'isolation_actuelle', type: 'TEXT' },
-  isolation_renovee: { id: 'mqmzDq1QJPfCEP34Q37p', name: 'Isolation renovee', key: 'isolation_renovee', type: 'TEXT' },
-  landing_page: { id: 'DMUCuD4oBfdUOBiVo1qA', name: 'Landing Page', key: 'landing_page', type: 'TEXT' },
-  lead_source: { id: 'XimBSL4FI2y7oMxiWjK2', name: 'Lead Source', key: 'lead_source', type: 'TEXT' },
-  materiau_du_toit: { id: 'aOb3FQ7zOtdBErEfPnDg', name: 'Materiau du toit', key: 'materiau_du_toit', type: 'SINGLE_OPTIONS' },
-  nombre_d_etages: { id: 'QqePGhCRmfK3ByNuaXI9', name: 'Nombre d etages', key: 'nombre_d_etages', type: 'NUMERICAL' },
-  notes: { id: 'bHrujTNt0kslz0mFS5nE', name: 'Notes', key: 'notes', type: 'LARGE_TEXT' },
-  premium__prix_max: { id: 'e9kN0mpKjxWRRLLWcujm', name: 'Premium - Prix max', key: 'premium__prix_max', type: 'NUMERICAL' },
-  premium__prix_min: { id: 'ttsVR19bBSyHf8Lc3fWb', name: 'Premium - Prix min', key: 'premium__prix_min', type: 'NUMERICAL' },
-  prix: { id: 'P8EwCG0ifxnOFabQBJV1', name: 'Prix', key: 'prix', type: 'NUMERICAL' },
-  prix_maximum: { id: 'QUiqJmeqRmJui1ZZD6Wv', name: 'Prix maximum', key: 'prix_maximum', type: 'NUMERICAL' },
-  prix_minimum: { id: '0A9DQ5AVPjPLMaEX9LW2', name: 'Prix minimum', key: 'prix_minimum', type: 'NUMERICAL' },
-  problemes_identifies: { id: 'aEWZrwvzZRl9ySTn55jb', name: 'Problemes identifies', key: 'problemes_identifies', type: 'TEXT' },
-  souhaite_extraire_le_mazout: { id: '3j2zscffI0rWABrTEl95', name: 'Souhaite extraire le mazout', key: 'souhaite_extraire_le_mazout', type: 'TEXT' },
-  soussol_fini: { id: 'JrAZ3GA3qo5XiwNSE57A', name: 'Sous-sol fini', key: 'soussol_fini', type: 'TEXT' },
-  standard__prix_max: { id: 'Jr56lY8nfjmg8YhxhrYo', name: 'Standard - Prix max', key: 'standard__prix_max', type: 'NUMERICAL' },
-  standard__prix_min: { id: '1tMx2T5Ev6YtDYS2v1rg', name: 'Standard - Prix min', key: 'standard__prix_min', type: 'NUMERICAL' },
-  superficie_total: { id: 'bcKYXTd38h04TpdLQbW3', name: 'Superficie total', key: 'superficie_total', type: 'NUMERICAL' },
-  systeme_de_chauffage: { id: 'rLog2vZHEGXbWole68H7', name: 'Systeme de chauffage', key: 'systeme_de_chauffage', type: 'TEXT' },
-  type_de_service: { id: 'LvcpS9eyoKbT7mxCgu2l', name: 'Type de service', key: 'type_de_service', type: 'TEXT' },
-  type_de_toiture: { id: 'XPdGWEnhEY92ev87oMDW', name: 'Type de toiture', key: 'type_de_toiture', type: 'TEXT' },
-  utm_source: { id: 'G8zgEfoKPiyuJ2LVL4wA', name: 'UTM Source', key: 'utm_source', type: 'TEXT' },
-  ville: { id: 'bakWUoWjz3Dk50uKUYKO', name: 'Ville', key: 'ville', type: 'TEXT' },
-  fbclid: { id: '6u5p83Sa9dCbR45lcAOY', name: 'fbclid', key: 'fbclid', type: 'TEXT' },
-  latitude: { id: 'sG3nmxXPEouHIiJ1oTHo', name: 'Latitude', key: 'latitude', type: 'TEXT' },
-  longitude: { id: 'pPbB4UsZ0bdTP9Dju1Wl', name: 'Longitude', key: 'longitude', type: 'TEXT' },
-  province: { id: 'ibGb3uxiWDHHYtebRk3b', name: 'Province', key: 'province', type: 'TEXT' },
-  forme_du_toit: { id: 'BR6mJ9syEEv7IewkK8GQ', name: 'Forme du toit', key: 'forme_du_toit', type: 'TEXT' },
-  nb_segments_toiture: { id: 'hlkfNt7y4K0wNDjEewGy', name: 'Nb segments toiture', key: 'nb_segments_toiture', type: 'NUMERICAL' },
-  surface_utilisable: { id: 'fobOHK8nn9oHQV4JUdm0', name: 'Surface utilisable', key: 'surface_utilisable', type: 'NUMERICAL' },
-  difficulte_acces: { id: 'UQtSSGzHnRWtgiLejpaq', name: 'Difficulte acces', key: 'difficulte_acces', type: 'TEXT' },
-  complexite_pente: { id: 'RrkCLK6gpzdfcunfHo1S', name: 'Complexite pente', key: 'complexite_pente', type: 'TEXT' },
-  obstacles: { id: 't4udE1nzUFzqxpMQTKFh', name: 'Obstacles', key: 'obstacles', type: 'TEXT' },
-  prix_par_pied_carre: { id: 'iCozU2qpUk4b6ieho2Ui', name: 'Prix par pied carre', key: 'prix_par_pied_carre', type: 'NUMERICAL' },
-  score_complexite: { id: 'n95jvIBSyNWgz0rNqrkg', name: 'Score complexite', key: 'score_complexite', type: 'NUMERICAL' },
-  type_habitation: { id: 'AMEcJIzzNlQ0rUJsde58', name: 'Type habitation', key: 'type_habitation', type: 'TEXT' },
-  statut_proprietaire: { id: '5QlDPyfHV4L2GfhFVAfs', name: 'Statut proprietaire', key: 'statut_proprietaire', type: 'TEXT' },
-  eligible_subvention: { id: 'FaFRPgQuqK6qKZn2q9dV', name: 'Eligible subvention', key: 'eligible_subvention', type: 'TEXT' },
-} as const
+import { GHL_FIELDS_HVAC } from './ghl-fields-hvac'
+import { GHL_FIELDS_ISO } from './ghl-fields-iso'
+
+export interface GHLFieldDef {
+  id: string
+  name: string
+  key: string
+  type: string
+}
+
+export type LeadVertical =
+  | 'isolation'
+  | 'hvac'
+  | 'subvention'
+  | 'isolation_soumission_rapide'
+  | 'roofing'
+
+export function getFieldsFor(vertical: LeadVertical): Record<string, GHLFieldDef> {
+  if (vertical === 'hvac' || vertical === 'roofing') return GHL_FIELDS_HVAC
+  return GHL_FIELDS_ISO
+}
