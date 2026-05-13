@@ -271,41 +271,45 @@ export default function ThermopompesPage() {
       }, { eventID: eventId });
     }
 
-    // Envoyer le lead au CRM
-    try {
-      await fetch('/api/leads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...data,
-          leadType: 'hvac',
-          address,
-          postalCode,
-          city,
-          coordinates,
-          province,
-          solarArea,
-          geometric,
-          thermal,
-          finalArea,
-          wantsOilTankRemoval: thermal.wantsOilTankRemoval ?? null,
-          estimatedPrice: basePrice,
-          estimatedPriceMin: priceRange?.min,
-          estimatedPriceMax: priceRange?.max,
-          eventId,
-          utmParams,
-        })
-      })
-    } catch (error) {
-      console.error('Erreur envoi lead:', error)
+    const clientLeadId = `LEAD${Date.now()}${Math.random().toString(36).substring(2, 10)}`
+    const leadPayload = {
+      ...data,
+      leadId: clientLeadId,
+      leadType: 'hvac',
+      address,
+      postalCode,
+      city,
+      coordinates,
+      province,
+      solarArea,
+      geometric,
+      thermal,
+      finalArea,
+      wantsOilTankRemoval: thermal.wantsOilTankRemoval ?? null,
+      estimatedPrice: basePrice,
+      estimatedPriceMin: priceRange?.min,
+      estimatedPriceMax: priceRange?.max,
+      eventId,
+      utmParams,
     }
 
     setShowLeadCapture(false)
     if (OTP_ENABLED) {
-      sessionStorage.setItem("thermopompe-result", JSON.stringify(resolvedRec))
-      sessionStorage.setItem("otp-verify", JSON.stringify({ phone: data.phone, redirectTo: "/thermopompes" }))
+      // Defer the /api/leads call until OTP is verified on /verifier-telephone.
+      sessionStorage.setItem('pending-lead', JSON.stringify(leadPayload))
+      sessionStorage.setItem('thermopompe-result', JSON.stringify(resolvedRec))
+      sessionStorage.setItem('otp-verify', JSON.stringify({ phone: data.phone, redirectTo: '/thermopompes' }))
       router.push('/verifier-telephone')
     } else {
+      try {
+        await fetch('/api/leads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(leadPayload),
+        })
+      } catch (error) {
+        console.error('Erreur envoi lead:', error)
+      }
       setCurrentStep(6)
     }
   }

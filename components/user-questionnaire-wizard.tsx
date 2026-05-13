@@ -210,45 +210,48 @@ export function UserQuestionnaire({ roofData, onComplete }: UserQuestionnairePro
         }, { eventID: eventId });
       }
 
+      // Pre-generate a client lead ID so the funnel can route to /pricing
+      // before /api/leads is actually called (when OTP_ENABLED=true, the
+      // POST is deferred until after OTP success on /verifier-telephone).
+      const clientLeadId = `LEAD${Date.now()}${Math.random().toString(36).substring(2, 10)}`
+
       // Now prepare complete lead data with pricing included
       const leadPayload = {
         firstName: leadData.firstName,
         lastName: leadData.lastName,
         email: leadData.email,
         phone: leadData.phone,
+        leadId: clientLeadId,
         roofData,
         userAnswers: answers,
         pricingData,
         utmParams,
         eventId
       }
-      
-      
-      const response = await fetch('/api/leads', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(leadPayload),
-      })
-      
-      
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('❌ API ERROR - Status:', response.status)
-        console.error('❌ API ERROR - Text:', errorText)
-        throw new Error(`API call failed: ${response.status}`)
-      }
-      
-      const result = await response.json()
-      
-      const leadDataWithId = {
-        ...leadData,
-        leadId: result.leadId
-      }
 
       if (OTP_ENABLED) {
-        sessionStorage.setItem("otp-verify", JSON.stringify({ phone: leadData.phone, redirectTo: "/success" }))
+        // Defer the submission: stash the payload, then let /verifier-telephone
+        // submit it (with otpToken) after Twilio confirms the SMS code.
+        sessionStorage.setItem('pending-lead', JSON.stringify(leadPayload))
+        sessionStorage.setItem('otp-verify', JSON.stringify({ phone: leadData.phone, redirectTo: '/success' }))
+      } else {
+        const response = await fetch('/api/leads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(leadPayload),
+        })
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error('❌ API ERROR - Status:', response.status)
+          console.error('❌ API ERROR - Text:', errorText)
+          throw new Error(`API call failed: ${response.status}`)
+        }
+      }
+
+      const leadDataWithId = {
+        ...leadData,
+        leadId: clientLeadId
       }
 
       setShowLeadCapture(false)
@@ -300,11 +303,34 @@ export function UserQuestionnaire({ roofData, onComplete }: UserQuestionnairePro
           },
         }
       }
+      const fallbackLeadId = `LEAD${Date.now()}${Math.random().toString(36).substring(2, 10)}`
+      const fallbackPayload = {
+        firstName: leadData.firstName,
+        lastName: leadData.lastName,
+        email: leadData.email,
+        phone: leadData.phone,
+        leadId: fallbackLeadId,
+        roofData,
+        userAnswers: answers,
+        pricingData: fallbackPricing,
+        utmParams,
+      }
       if (OTP_ENABLED) {
-        sessionStorage.setItem("otp-verify", JSON.stringify({ phone: leadData.phone, redirectTo: "/success" }))
+        sessionStorage.setItem('pending-lead', JSON.stringify(fallbackPayload))
+        sessionStorage.setItem('otp-verify', JSON.stringify({ phone: leadData.phone, redirectTo: '/success' }))
+      } else {
+        try {
+          await fetch('/api/leads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(fallbackPayload),
+          })
+        } catch (fallbackErr) {
+          console.error('❌ Fallback lead submission failed:', fallbackErr)
+        }
       }
       setShowLeadCapture(false)
-      onComplete(answers, leadData, fallbackPricing)
+      onComplete(answers, { ...leadData, leadId: fallbackLeadId }, fallbackPricing)
     } finally {
       setIsSubmittingLead(false)
     }

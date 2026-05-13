@@ -39,6 +39,26 @@ WEBHOOK_URL=https://votre-webhook-url.com/endpoint
 
 
 # ============================================================================
+# OTP / TWILIO VERIFY
+# ============================================================================
+
+# Required when NEXT_PUBLIC_OTP_ENABLED=true. The server signs short-lived
+# JWTs proving the OTP step succeeded; /api/leads rejects any submission
+# whose token is missing, expired, or bound to a different phone number.
+# Generate with: openssl rand -hex 32  (must be 32+ chars)
+OTP_SIGNING_SECRET=
+
+# Toggle the OTP-first flow (frontend pages defer /api/leads until OTP succeeds
+# on /verifier-telephone). Both sides must agree; leave as 'true' in prod.
+NEXT_PUBLIC_OTP_ENABLED=true
+
+# Twilio Verify credentials (required when OTP is enabled)
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_VERIFY_SERVICE_SID=
+
+
+# ============================================================================
 # AUTRES
 # ============================================================================
 
