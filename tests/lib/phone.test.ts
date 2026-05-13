@@ -19,7 +19,7 @@ describe("isValidQuebecPhone", () => {
     "1-514-555-1234",
     "1(514)555-1234",
     "  514-555-1234  ",
-    // All Quebec area codes
+    // All Quebec area codes (including recent overlays)
     "418-555-9999",
     "450-555-0000",
     "438-555-1111",
@@ -28,9 +28,13 @@ describe("isValidQuebecPhone", () => {
     "367-555-4444",
     "581-555-1234",
     "819-555-1234",
+    "263-555-1234", // Montreal overlay (2023)
+    "354-555-1234", // 450/579 overlay
+    "468-555-1234", // 418/581 overlay
     // Ottawa-Gatineau cross-border (Outaouais residents often have ON numbers)
     "613-555-1234",
     "343-555-1234",
+    "753-555-1234", // 613/343 overlay
   ])("accepts valid Quebec / Outaouais number: %s", (input) => {
     expect(isValidQuebecPhone(input)).toBe(true)
   })

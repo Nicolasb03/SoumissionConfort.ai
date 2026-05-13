@@ -1,10 +1,15 @@
 /**
  * Quebec phone validation and normalization.
  *
- * Accepted area codes:
- *   - Quebec: 367, 418, 438, 450, 514, 579, 581, 819, 873
- *   - Ottawa-Gatineau cross-border (many Gatineau residents use ON numbers):
- *     343, 613
+ * Accepted area codes (per CRTC, including current overlays) :
+ *   - Quebec :
+ *       Montreal           : 514, 438, 263
+ *       Surrounding QC     : 450, 579, 354
+ *       Quebec City + East : 418, 581, 468
+ *       Outaouais/Mauricie : 819, 873
+ *       Province-wide      : 367
+ *   - Outaouais cross-border (many Gatineau residents use ON numbers) :
+ *       Ottawa region      : 613, 343, 753
  *
  * Accepted shapes :
  *   514-555-1234, (514) 555-1234, 514.555.1234, 5145551234,
@@ -12,13 +17,15 @@
  *
  * Rejected :
  *   anything with letters, fewer than 10 digits, central office code
- *   starting 0 or 1, any non-Quebec/non-Outaouais NANP area code (e.g.
+ *   starting 0 or 1, any non-QC/non-Outaouais NANP area code (e.g.
  *   `212-555-1234` from NYC fails — not a typo we want in our CRM).
  */
 
 const QC_AREA_CODES = [
-  '367', '418', '438', '450', '514', '579', '581', '819', '873', // Quebec
-  '343', '613', // Ottawa-Gatineau region (ON side, but locally Outaouais)
+  // Quebec
+  '263', '354', '367', '418', '438', '450', '468', '514', '579', '581', '819', '873',
+  // Outaouais cross-border (ON side, locally Gatineau region)
+  '343', '613', '753',
 ] as const
 
 const QC_AREA_CODE_GROUP = `(?:${QC_AREA_CODES.join('|')})`
