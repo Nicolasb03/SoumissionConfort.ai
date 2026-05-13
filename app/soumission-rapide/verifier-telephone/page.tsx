@@ -28,7 +28,6 @@ export default function VerifierTelephonePage() {
         if (data.phone) {
           hasSent.current = true
           setPhone(data.phone)
-          sessionStorage.setItem("otp-flow-active", "1")
           sendOtp(data.phone)
           return
         }
@@ -38,10 +37,21 @@ export default function VerifierTelephonePage() {
     router.replace("/soumission-rapide/questionnaire")
   }, [])
 
+  const readLastSent = (): { phone: string; ts: number } | null => {
+    try {
+      const raw = sessionStorage.getItem("otp-sent-at")
+      if (!raw) return null
+      const parsed = JSON.parse(raw)
+      if (typeof parsed?.phone === "string" && typeof parsed?.ts === "number") {
+        return parsed
+      }
+    } catch { /* ignore */ }
+    return null
+  }
+
   const sendOtp = async (phoneNumber: string) => {
-    const lastSentRaw = sessionStorage.getItem("otp-sent-at")
-    const lastSent = lastSentRaw ? parseInt(lastSentRaw, 10) : 0
-    if (lastSent && Date.now() - lastSent < SEND_THROTTLE_MS) {
+    const last = readLastSent()
+    if (last && last.phone === phoneNumber && Date.now() - last.ts < SEND_THROTTLE_MS) {
       setState("pending")
       return
     }
@@ -61,7 +71,7 @@ export default function VerifierTelephonePage() {
         setState("error")
         return
       }
-      sessionStorage.setItem("otp-sent-at", String(Date.now()))
+      sessionStorage.setItem("otp-sent-at", JSON.stringify({ phone: phoneNumber, ts: Date.now() }))
       setState("pending")
     } catch {
       setErrorMessage("Erreur réseau. Veuillez réessayer.")
@@ -71,19 +81,24 @@ export default function VerifierTelephonePage() {
 
   const cleanupAndRedirect = (target: string) => {
     sessionStorage.removeItem("pending-lead")
-    sessionStorage.removeItem("otp-flow-active")
+    sessionStorage.removeItem("otp-verify")
     sessionStorage.removeItem("otp-sent-at")
+    sessionStorage.removeItem("soumission-rapide-lead")
     router.push(target)
   }
 
-  const submitDeferredLead = async (otpToken: string): Promise<{ ok: true } | { ok: false; expired: boolean }> => {
+  type SubmitResult =
+    | { ok: true }
+    | { ok: false; reason: "EXPIRED" | "NO_PENDING" | "OTHER" }
+
+  const submitDeferredLead = async (otpToken: string): Promise<SubmitResult> => {
     const pendingRaw = sessionStorage.getItem("pending-lead")
-    if (!pendingRaw) return { ok: true }
+    if (!pendingRaw) return { ok: false, reason: "NO_PENDING" }
     let pending: Record<string, unknown>
     try {
       pending = JSON.parse(pendingRaw)
     } catch {
-      return { ok: true }
+      return { ok: false, reason: "NO_PENDING" }
     }
     try {
       const res = await fetch("/api/leads", {
@@ -97,10 +112,10 @@ export default function VerifierTelephonePage() {
         const body = await res.json()
         code = body?.code
       } catch { /* ignore */ }
-      return { ok: false, expired: code === "OTP_TOKEN_EXPIRED" }
+      return { ok: false, reason: code === "OTP_TOKEN_EXPIRED" ? "EXPIRED" : "OTHER" }
     } catch (err) {
       console.error("verifier-telephone (soumission-rapide): lead submission failed", err)
-      return { ok: false, expired: false }
+      return { ok: false, reason: "OTHER" }
     }
   }
 
@@ -109,10 +124,19 @@ export default function VerifierTelephonePage() {
     setState("confirming")
     setErrorMessage("")
     try {
+      let pendingLeadId: string | null = null
+      try {
+        const pendingRaw = sessionStorage.getItem("pending-lead")
+        if (pendingRaw) {
+          const pending = JSON.parse(pendingRaw)
+          if (typeof pending?.leadId === "string") pendingLeadId = pending.leadId
+        }
+      } catch { /* ignore */ }
+
       const res = await fetch("/api/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, code: otpValue }),
+        body: JSON.stringify({ phone, code: otpValue, leadId: pendingLeadId }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -124,10 +148,17 @@ export default function VerifierTelephonePage() {
       setState("submitting")
       const result = await submitDeferredLead(data.otpToken)
       if (!result.ok) {
-        if (result.expired) {
+        if (result.reason === "EXPIRED") {
           setErrorMessage("Le code a expiré. Demandez-en un nouveau.")
           setOtpExpired(true)
           setState("pending")
+        } else if (result.reason === "NO_PENDING") {
+          setErrorMessage(
+            "Votre session a expiré. Vous allez être redirigé pour recommencer.",
+          )
+          setState("error")
+          setTimeout(() => cleanupAndRedirect("/soumission-rapide/questionnaire"), 3000)
+          return
         } else {
           setErrorMessage("Erreur lors de l'envoi. Veuillez recommencer.")
           setState("error")

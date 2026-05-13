@@ -15,8 +15,14 @@ const ISSUER = "soumissionconfort.otp"
 const AUDIENCE = "soumissionconfort.leads"
 
 export type OtpTokenVerifyResult =
-  | { ok: true; phone: string }
-  | { ok: false; reason: "EXPIRED" | "INVALID" | "PHONE_MISMATCH" | "MISCONFIGURED" }
+  | { ok: true; phone: string; leadId: string | null }
+  | { ok: false; reason: "EXPIRED" | "INVALID" | "PHONE_MISMATCH" | "LEAD_ID_MISMATCH" | "MISCONFIGURED" }
+
+export type SignOtpTokenOptions = {
+  ttlMs?: number
+  /** Bind the token to a specific lead so it can't be replayed across leads. */
+  leadId?: string | null
+}
 
 function getSecretKey(): Uint8Array {
   const raw = process.env.OTP_SIGNING_SECRET
@@ -29,13 +35,20 @@ function getSecretKey(): Uint8Array {
 }
 
 /**
- * Sign a short-lived token bound to a normalized E.164 phone number.
+ * Sign a short-lived token bound to a normalized E.164 phone number and,
+ * optionally, a specific `leadId`. The lead binding is the practical mitigation
+ * against replay: even if a token leaks, it can only be used for the same
+ * funnel session that minted it (since each funnel generates a fresh leadId).
  * Throws if the secret is misconfigured or the phone is not normalizable.
  */
 export async function signOtpToken(
   phone: string,
-  ttlMs: number = DEFAULT_TTL_MS,
+  optsOrTtl: SignOtpTokenOptions | number = {},
 ): Promise<string> {
+  const opts: SignOtpTokenOptions =
+    typeof optsOrTtl === "number" ? { ttlMs: optsOrTtl } : optsOrTtl
+  const ttlMs = opts.ttlMs ?? DEFAULT_TTL_MS
+
   const normalized = normalizePhone(phone)
   if (!normalized) {
     throw new Error("Cannot sign OTP token: phone failed normalization")
@@ -45,7 +58,12 @@ export async function signOtpToken(
   const exp = now + Math.floor(ttlMs / 1000)
   const jti = crypto.randomUUID()
 
-  return await new SignJWT({ phone: normalized })
+  const claims: Record<string, unknown> = { phone: normalized }
+  if (opts.leadId) {
+    claims.leadId = opts.leadId
+  }
+
+  return await new SignJWT(claims)
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setIssuer(ISSUER)
     .setAudience(AUDIENCE)
@@ -57,12 +75,14 @@ export async function signOtpToken(
 
 /**
  * Verify a token AND check that its `phone` claim matches the expected number
- * (after normalization). Returns a tagged union for the caller to translate
- * into the appropriate HTTP status.
+ * (after normalization). When `expectedLeadId` is provided, the token's
+ * `leadId` claim must match exactly (no claim = mismatch). Returns a tagged
+ * union for the caller to translate into the appropriate HTTP status.
  */
 export async function verifyOtpToken(
   token: string | null | undefined,
   expectedPhone: string,
+  expectedLeadId?: string | null,
 ): Promise<OtpTokenVerifyResult> {
   if (!token || typeof token !== "string") {
     return { ok: false, reason: "INVALID" }
@@ -89,7 +109,13 @@ export async function verifyOtpToken(
     if (tokenPhone !== expectedNormalized) {
       return { ok: false, reason: "PHONE_MISMATCH" }
     }
-    return { ok: true, phone: tokenPhone }
+    const tokenLeadId = typeof payload.leadId === "string" ? payload.leadId : null
+    if (expectedLeadId) {
+      if (!tokenLeadId || tokenLeadId !== expectedLeadId) {
+        return { ok: false, reason: "LEAD_ID_MISMATCH" }
+      }
+    }
+    return { ok: true, phone: tokenPhone, leadId: tokenLeadId }
   } catch (err) {
     if (err instanceof joseErrors.JWTExpired) {
       return { ok: false, reason: "EXPIRED" }

@@ -31,11 +31,45 @@ describe("otp-token", () => {
     vi.useFakeTimers()
     const start = new Date("2026-01-01T00:00:00Z")
     vi.setSystemTime(start)
-    const token = await signOtpToken("514-555-1234", 60_000) // 60s TTL
+    const token = await signOtpToken("514-555-1234", { ttlMs: 60_000 }) // 60s TTL
     vi.setSystemTime(new Date(start.getTime() + 120_000)) // +2min
     const result = await verifyOtpToken(token, "514-555-1234")
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.reason).toBe("EXPIRED")
+  })
+
+  it("supports the legacy ttlMs-as-number signature", async () => {
+    const token = await signOtpToken("514-555-1234", 30_000)
+    const result = await verifyOtpToken(token, "514-555-1234")
+    expect(result.ok).toBe(true)
+  })
+
+  it("binds leadId in the token and verifies it back", async () => {
+    const token = await signOtpToken("514-555-1234", { leadId: "LEAD12345678" })
+    const result = await verifyOtpToken(token, "514-555-1234", "LEAD12345678")
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.leadId).toBe("LEAD12345678")
+  })
+
+  it("rejects when leadId expected but token has none (cross-lead replay attempt)", async () => {
+    const token = await signOtpToken("514-555-1234")
+    const result = await verifyOtpToken(token, "514-555-1234", "LEAD12345678")
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.reason).toBe("LEAD_ID_MISMATCH")
+  })
+
+  it("rejects when token leadId does not match expected (replay across leads)", async () => {
+    const token = await signOtpToken("514-555-1234", { leadId: "LEADaaaaaaaa" })
+    const result = await verifyOtpToken(token, "514-555-1234", "LEADbbbbbbbb")
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.reason).toBe("LEAD_ID_MISMATCH")
+  })
+
+  it("ignores leadId in token when caller does not expect one (backward compat)", async () => {
+    const token = await signOtpToken("514-555-1234", { leadId: "LEAD12345678" })
+    const result = await verifyOtpToken(token, "514-555-1234")
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.leadId).toBe("LEAD12345678")
   })
 
   it("rejects a malformed token", async () => {

@@ -85,7 +85,7 @@ describe("/api/leads — phone validation + OTP gate", () => {
   })
 
   it("rejects an expired token with 401 OTP_TOKEN_EXPIRED", async () => {
-    const token = await signOtpToken("514-555-1234", 1000)
+    const token = await signOtpToken("514-555-1234", { ttlMs: 1000 })
     await new Promise((r) => setTimeout(r, 1500))
     const { POST } = await import("../../app/api/leads/route")
     const res = await POST(
@@ -94,6 +94,52 @@ describe("/api/leads — phone validation + OTP gate", () => {
     expect(res.status).toBe(401)
     const body = await res.json()
     expect(body.code).toBe("OTP_TOKEN_EXPIRED")
+  })
+
+  it("rejects token whose leadId claim doesn't match the request leadId (replay)", async () => {
+    const token = await signOtpToken("514-555-1234", { leadId: "LEADaaaaaaaa" })
+    const { POST } = await import("../../app/api/leads/route")
+    const res = await POST(
+      buildRequest({
+        ...baseHVACBody,
+        leadId: "LEADbbbbbbbb",
+        otpToken: token,
+      }) as any,
+    )
+    expect(res.status).toBe(401)
+    const body = await res.json()
+    expect(body.code).toBe("OTP_TOKEN_INVALID")
+    expect(ghlMocks.postLeadToGHL).not.toHaveBeenCalled()
+  })
+
+  it("rejects when request leadId is well-formed but token has no leadId claim", async () => {
+    const token = await signOtpToken("514-555-1234") // no leadId binding
+    const { POST } = await import("../../app/api/leads/route")
+    const res = await POST(
+      buildRequest({
+        ...baseHVACBody,
+        leadId: "LEAD12345678",
+        otpToken: token,
+      }) as any,
+    )
+    expect(res.status).toBe(401)
+    const body = await res.json()
+    expect(body.code).toBe("OTP_TOKEN_INVALID")
+    expect(ghlMocks.postLeadToGHL).not.toHaveBeenCalled()
+  })
+
+  it("accepts when leadId claim matches the request leadId", async () => {
+    const token = await signOtpToken("514-555-1234", { leadId: "LEAD12345678" })
+    const { POST } = await import("../../app/api/leads/route")
+    const res = await POST(
+      buildRequest({
+        ...baseHVACBody,
+        leadId: "LEAD12345678",
+        otpToken: token,
+      }) as any,
+    )
+    expect(res.status).toBe(200)
+    expect(ghlMocks.postLeadToGHL).toHaveBeenCalledTimes(1)
   })
 
   it("accepts a valid token + valid phone and normalizes to E.164 before GHL", async () => {

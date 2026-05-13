@@ -5,7 +5,7 @@ import { signOtpToken } from '@/lib/otp-token'
 
 export async function POST(request: NextRequest) {
   try {
-    const { phone, code } = await request.json()
+    const { phone, code, leadId } = await request.json()
 
     if (!phone || !code) {
       return NextResponse.json({ error: 'Paramètres manquants' }, { status: 400 })
@@ -36,10 +36,15 @@ export async function POST(request: NextRequest) {
     }
 
     // OTP confirmed by Twilio. Mint a short-lived signed token that
-    // /api/leads will require before accepting the contact.
+    // /api/leads will require before accepting the contact. We also bind the
+    // token to the funnel-supplied leadId (when present) so a leaked token
+    // can't be replayed against a different lead within the TTL window.
+    const safeLeadId = typeof leadId === 'string' && /^LEAD[A-Za-z0-9]{8,}$/.test(leadId)
+      ? leadId
+      : null
     let otpToken: string
     try {
-      otpToken = await signOtpToken(e164)
+      otpToken = await signOtpToken(e164, { leadId: safeLeadId })
     } catch (signErr: any) {
       console.error('verify-otp: failed to sign token', signErr?.message)
       return NextResponse.json(

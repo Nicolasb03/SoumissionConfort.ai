@@ -36,11 +36,20 @@ export async function POST(request: NextRequest) {
     }
 
     if (OTP_REQUIRED) {
-      const tokenResult = await verifyOtpToken(leadData.otpToken, e164Phone)
+      // Bind token verification to the leadId when the client supplied a
+      // well-formed one. /api/verify-otp issues the token with this leadId
+      // in its claims, so a leaked token cannot be replayed against a
+      // different lead within the 15min TTL.
+      const candidateLeadId =
+        typeof leadData.leadId === 'string' && /^LEAD[A-Za-z0-9]{8,}$/.test(leadData.leadId)
+          ? leadData.leadId
+          : null
+      const tokenResult = await verifyOtpToken(leadData.otpToken, e164Phone, candidateLeadId)
       if (!tokenResult.ok) {
         const codeMap = {
           EXPIRED: { status: 401, code: 'OTP_TOKEN_EXPIRED' as const, msg: 'Code OTP expiré.' },
           PHONE_MISMATCH: { status: 401, code: 'OTP_TOKEN_INVALID' as const, msg: 'Jeton OTP invalide.' },
+          LEAD_ID_MISMATCH: { status: 401, code: 'OTP_TOKEN_INVALID' as const, msg: 'Jeton OTP invalide.' },
           INVALID: { status: 401, code: 'OTP_TOKEN_INVALID' as const, msg: 'Jeton OTP invalide.' },
           MISCONFIGURED: { status: 500, code: 'OTP_TOKEN_MISCONFIGURED' as const, msg: 'Configuration serveur manquante.' },
         }
