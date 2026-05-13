@@ -277,9 +277,13 @@ export default function SubventionsPage() {
       })
 
       track("Subvention Lead Captured", { eligible })
+      setIsSubmittingLead(false)
+      setStep("result")
     } catch (error) {
       console.error("Error submitting subvention lead:", error)
-    } finally {
+      // On error in the OTP-disabled path, still show the result page so the
+      // user isn't stranded. The OTP-enabled path has already navigated away
+      // via the early `return` above, so this branch never runs there.
       setIsSubmittingLead(false)
       setStep("result")
     }
