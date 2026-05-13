@@ -8,6 +8,8 @@ import { ReviewsSection } from "@/components/reviews-section"
 import { getCurrentUTMParameters, type UTMParameters } from "@/lib/utm-utils"
 import { track } from "@vercel/analytics"
 import { OTP_ENABLED } from "@/lib/feature-flags"
+import { PhoneInput } from "@/components/phone-input"
+import { isValidQuebecPhone } from "@/lib/phone"
 import {
   Home,
   Building2,
@@ -199,19 +201,18 @@ export default function SubventionsPage() {
   // -----------------------------------------------------------------------
 
   const isLeadFormValid = () => {
-    return (
+    return Boolean(
       leadForm.firstName.trim() &&
       leadForm.lastName.trim() &&
       leadForm.email.trim() &&
-      leadForm.phone.trim()
+      isValidQuebecPhone(leadForm.phone)
     )
   }
 
   const handleLeadSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const digits = leadForm.phone.replace(/\D/g, "")
-    if (digits.length !== 10) {
-      setPhoneError("Veuillez entrer un numéro de téléphone à 10 chiffres (ex: 5141234567).")
+    if (!isValidQuebecPhone(leadForm.phone)) {
+      setPhoneError("Veuillez entrer un numéro de téléphone québécois valide (ex: 514-555-1234).")
       return
     }
     setPhoneError(null)
@@ -238,28 +239,35 @@ export default function SubventionsPage() {
         email: leadForm.email,
       })
 
-      await fetch("/api/leads", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...leadForm,
-          leadType: "subvention",
-          address,
-          subventionAnswers: answers,
-          eligible,
-          eligibilityCriteria: criteria,
-          utmParams,
-          eventId,
-        }),
-      })
+      const clientLeadId = `LEAD${Date.now()}${Math.random().toString(36).substring(2, 10)}`
+      const leadPayload = {
+        ...leadForm,
+        leadId: clientLeadId,
+        leadType: "subvention",
+        address,
+        subventionAnswers: answers,
+        eligible,
+        eligibilityCriteria: criteria,
+        utmParams,
+        eventId,
+      }
+
+      if (OTP_ENABLED) {
+        // Defer /api/leads until OTP success on /verifier-telephone.
+        sessionStorage.setItem("pending-lead", JSON.stringify(leadPayload))
+        sessionStorage.setItem("otp-verify", JSON.stringify({ phone: leadForm.phone, redirectTo: "/success" }))
+      } else {
+        await fetch("/api/leads", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(leadPayload),
+        })
+      }
 
       track("Subvention Lead Captured", { eligible })
     } catch (error) {
       console.error("Error submitting subvention lead:", error)
     } finally {
-      if (OTP_ENABLED) {
-        sessionStorage.setItem("otp-verify", JSON.stringify({ phone: leadForm.phone, redirectTo: "/success" }))
-      }
       setIsSubmittingLead(false)
       setStep("result")
     }
@@ -682,14 +690,13 @@ export default function SubventionsPage() {
               <div>
                 <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">Numéro de téléphone *</label>
                 <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 z-10" />
+                  <PhoneInput
                     id="phone"
-                    type="tel"
                     value={leadForm.phone}
-                    onChange={(e) => setLeadForm((p) => ({ ...p, phone: e.target.value }))}
+                    onChange={(value) => setLeadForm((p) => ({ ...p, phone: value }))}
                     disabled={isSubmittingLead}
-                    className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:ring-0 focus:outline-none transition-colors"
+                    inputClassName="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-green-500 focus:ring-0 focus:outline-none transition-colors"
                     placeholder="(514) 123-4567"
                     required
                   />

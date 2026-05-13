@@ -10,6 +10,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { useLanguage } from "@/lib/language-context"
 import { X, Loader2, Shield, CheckCircle } from 'lucide-react'
 import { track } from '@vercel/analytics'
+import { PhoneInput } from "@/components/phone-input"
+import { isValidQuebecPhone } from "@/lib/phone"
 
 interface LeadCapturePopupProps {
   isOpen: boolean
@@ -50,11 +52,11 @@ export function LeadCapturePopup({ isOpen, onClose, onSubmit, isSubmitting = fal
   }
 
   const isFormValid = () => {
-    return (
+    return Boolean(
       formData.firstName.trim() &&
       formData.lastName.trim() &&
       formData.email.trim() &&
-      formData.phone.trim()
+      isValidQuebecPhone(formData.phone)
     )
   }
 
@@ -151,12 +153,11 @@ export function LeadCapturePopup({ isOpen, onClose, onSubmit, isSubmitting = fal
               {t.phoneNumber} *
             </Label>
             <div className="mt-1">
-              <Input
-                type="tel"
+              <PhoneInput
                 value={formData.phone}
-                onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+                onChange={(value) => setFormData((prev) => ({ ...prev, phone: value }))}
                 disabled={isSubmitting}
-                className="border-2 border-[#e8e8e0] focus:border-[#002042] rounded-lg font-serif-body"
+                inputClassName="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm border-2 border-[#e8e8e0] focus:border-[#002042] rounded-lg font-serif-body"
                 placeholder="(514) 123-4567"
               />
             </div>

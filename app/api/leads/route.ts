@@ -1,18 +1,60 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { initializeMetaConversionAPI } from "@/lib/meta-conversion-api"
 import { isGHLEnabled, postLeadToGHL, type LeadVertical, type NormalizedLead } from "@/lib/ghl-client"
+import { isValidQuebecPhone, normalizePhone } from "@/lib/phone"
+import { verifyOtpToken } from "@/lib/otp-token"
 
 console.log('🔥🔥🔥 LEADS API FILE LOADED - THIS SHOULD SHOW ON SERVER START 🔥🔥🔥')
+
+const OTP_REQUIRED = process.env.NEXT_PUBLIC_OTP_ENABLED === 'true'
 
 export async function POST(request: NextRequest) {
   console.log('🚨🚨🚨 LEADS API ENDPOINT CALLED - START OF FUNCTION 🚨🚨🚨')
   console.log('🕐 TIMESTAMP:', new Date().toISOString())
   console.log('🌍 REQUEST URL:', request.url)
   console.log('📍 REQUEST METHOD:', request.method)
-  
+
   try {
     const leadData = await request.json()
     console.log('🔥 LEADS API: Received lead data:', JSON.stringify(leadData, null, 2))
+
+    // ────────────────────────────────────────────────────────────────────
+    // Phone validation + OTP token check (fail-closed before CRM writes)
+    // ────────────────────────────────────────────────────────────────────
+    if (!isValidQuebecPhone(leadData.phone)) {
+      return NextResponse.json(
+        { error: 'Numéro de téléphone invalide.', code: 'INVALID_PHONE' },
+        { status: 400 },
+      )
+    }
+    const e164Phone = normalizePhone(leadData.phone)
+    if (!e164Phone) {
+      return NextResponse.json(
+        { error: 'Numéro de téléphone invalide.', code: 'INVALID_PHONE' },
+        { status: 400 },
+      )
+    }
+
+    if (OTP_REQUIRED) {
+      const tokenResult = await verifyOtpToken(leadData.otpToken, e164Phone)
+      if (!tokenResult.ok) {
+        const codeMap = {
+          EXPIRED: { status: 401, code: 'OTP_TOKEN_EXPIRED' as const, msg: 'Code OTP expiré.' },
+          PHONE_MISMATCH: { status: 401, code: 'OTP_TOKEN_INVALID' as const, msg: 'Jeton OTP invalide.' },
+          INVALID: { status: 401, code: 'OTP_TOKEN_INVALID' as const, msg: 'Jeton OTP invalide.' },
+          MISCONFIGURED: { status: 500, code: 'OTP_TOKEN_MISCONFIGURED' as const, msg: 'Configuration serveur manquante.' },
+        }
+        const m = codeMap[tokenResult.reason]
+        console.error('🚫 LEADS API: OTP token check failed:', tokenResult.reason)
+        return NextResponse.json({ error: m.msg, code: m.code }, { status: m.status })
+      }
+      // Replace the (possibly differently formatted) client phone with the
+      // canonical E.164 form proven by the OTP token. Downstream payloads
+      // become consistent and GHL gets the validated value.
+      leadData.phone = e164Phone
+    } else {
+      leadData.phone = e164Phone
+    }
 
     const leadType = leadData.leadType || 'isolation'
     const isHVAC = leadType === 'hvac'
@@ -47,10 +89,14 @@ export async function POST(request: NextRequest) {
     const utmParams = leadData.utmParams || {}
     console.log('🏷️ LEADS API: UTM Parameters received:', utmParams)
 
-    // Generate unique leadId using timestamp and random string (no dashes)
+    // Lead ID: honor a client-supplied value when it matches our format
+    // (the funnel needs the ID in the URL before /api/leads is called when
+    // OTP_ENABLED=true). Otherwise generate one server-side.
+    const clientLeadId = typeof leadData.leadId === 'string' ? leadData.leadId : ''
+    const isWellFormedLeadId = /^LEAD[A-Za-z0-9]{8,}$/.test(clientLeadId)
     const timestamp = Date.now()
     const randomString = Math.random().toString(36).substring(2, 10) // 8 character random string
-    const leadId = `LEAD${timestamp}${randomString}`
+    const leadId = isWellFormedLeadId ? clientLeadId : `LEAD${timestamp}${randomString}`
 
     // Helpers to present data in French for HVAC leads
     const formatBoolFr = (val: any) => val === true ? 'Oui' : val === false ? 'Non' : ''

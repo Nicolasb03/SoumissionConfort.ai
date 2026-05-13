@@ -1,17 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import twilio from 'twilio'
+import { isValidQuebecPhone, normalizePhone } from '@/lib/phone'
 
 export async function POST(request: NextRequest) {
   try {
     const { phone } = await request.json()
 
-    if (!phone) {
-      return NextResponse.json({ error: 'Numéro de téléphone requis' }, { status: 400 })
+    if (!isValidQuebecPhone(phone)) {
+      return NextResponse.json(
+        { error: 'Numéro de téléphone invalide.', code: 'INVALID_PHONE' },
+        { status: 400 },
+      )
     }
 
-    const normalizedPhone = phone.replace(/\D/g, '')
-    if (normalizedPhone.length < 10) {
-      return NextResponse.json({ error: 'Numéro de téléphone invalide' }, { status: 400 })
+    const e164 = normalizePhone(phone)
+    if (!e164) {
+      return NextResponse.json(
+        { error: 'Numéro de téléphone invalide.', code: 'INVALID_PHONE' },
+        { status: 400 },
+      )
     }
 
     const accountSid = process.env.TWILIO_ACCOUNT_SID
@@ -26,7 +33,7 @@ export async function POST(request: NextRequest) {
     const client = twilio(accountSid, authToken)
     await client.verify.v2
       .services(serviceSid)
-      .verifications.create({ to: `+1${normalizedPhone}`, channel: 'sms' })
+      .verifications.create({ to: e164, channel: 'sms' })
 
     return NextResponse.json({ success: true })
   } catch (error: any) {

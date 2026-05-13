@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { OTP_ENABLED } from "@/lib/feature-flags"
+import { PhoneInput } from "@/components/phone-input"
+import { isValidQuebecPhone } from "@/lib/phone"
 
 interface LeadCaptureFormProps {
   roofData: any
@@ -28,29 +30,36 @@ export function LeadCaptureForm({ roofData, userAnswers, leadData, onComplete }:
     e.preventDefault()
     setIsSubmitting(true)
 
+    const clientLeadId = `LEAD${Date.now()}${Math.random().toString(36).substring(2, 10)}`
+    const leadPayload = {
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      email: formData.email,
+      phone: formData.phone,
+      leadId: clientLeadId,
+      roofData,
+      userAnswers,
+    }
+
     try {
-      const leadPayload = {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        email: formData.email,
-        phone: formData.phone,
-        roofData,
-        userAnswers,
-      }
+      if (OTP_ENABLED) {
+        // Defer the /api/leads call until OTP is verified.
+        sessionStorage.setItem('pending-lead', JSON.stringify(leadPayload))
+      } else {
+        const response = await fetch('/api/leads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(leadPayload),
+        }).catch(fetchError => {
+          console.error('🔥 FETCH ERROR:', fetchError.message)
+          throw fetchError
+        })
 
-      const response = await fetch('/api/leads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(leadPayload),
-      }).catch(fetchError => {
-        console.error('🔥 FETCH ERROR:', fetchError.message)
-        throw fetchError
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('❌ API ERROR - Status:', response.status, errorText)
-        throw new Error(`API call failed: ${response.status}`)
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error('❌ API ERROR - Status:', response.status, errorText)
+          throw new Error(`API call failed: ${response.status}`)
+        }
       }
     } catch (error) {
       console.error('❌ CRITICAL ERROR submitting lead:', error)
@@ -70,7 +79,7 @@ export function LeadCaptureForm({ roofData, userAnswers, leadData, onComplete }:
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }))
   }
 
-  const isFormValid = formData.firstName && formData.lastName && formData.email && formData.phone
+  const isFormValid = Boolean(formData.firstName && formData.lastName && formData.email && isValidQuebecPhone(formData.phone))
 
   if (isSubmitting) {
     return (
@@ -139,14 +148,12 @@ export function LeadCaptureForm({ roofData, userAnswers, leadData, onComplete }:
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Téléphone *</label>
-              <input
-                type="tel"
-                name="phone"
+              <PhoneInput
                 value={formData.phone}
-                onChange={handleInputChange}
+                onChange={(value) => setFormData((prev) => ({ ...prev, phone: value }))}
+                inputClassName="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="(514) 555-0123"
                 required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="514-555-0123"
               />
             </div>
 

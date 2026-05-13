@@ -9,6 +9,8 @@ import { getCurrentUTMParameters, type UTMParameters } from "@/lib/utm-utils"
 import { getMunicipalityBySlug } from "@/lib/municipalities"
 import { useAddressAutocomplete } from "@/hooks/use-address-autocomplete"
 import { OTP_ENABLED } from "@/lib/feature-flags"
+import { PhoneInput } from "@/components/phone-input"
+import { isValidQuebecPhone } from "@/lib/phone"
 
 declare global {
   interface Window {
@@ -296,11 +298,11 @@ function QuestionnaireContent() {
   }, [currentStep, villeSlug, validAddress])
 
   const isFormValid = () => {
-    return (
+    return Boolean(
       formData.firstName.trim() &&
       formData.lastName.trim() &&
       formData.email.trim() &&
-      formData.phone.trim()
+      isValidQuebecPhone(formData.phone)
     )
   }
 
@@ -312,42 +314,51 @@ function QuestionnaireContent() {
     setIsSubmittingLead(true)
     const eventId = `lead_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
 
+    const clientLeadId = `LEAD${Date.now()}${Math.random().toString(36).substring(2, 10)}`
+    const leadPayload = {
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      email: formData.email,
+      phone: formData.phone,
+      leadId: clientLeadId,
+      ville: villeSlug,
+      address: validAddress,
+      city: addressCity,
+      postalCode: addressPostalCode,
+      coordinates: addressCoordinates,
+      province: addressProvince,
+      source: "soumission-rapide",
+      leadType: "isolation_soumission_rapide",
+      userAnswers: {
+        habitationType: selections.habitationType || "",
+        projectType: selections.habitationType || "", // API compat
+        ownershipStatus: selections.ownershipStatus || "",
+        insulationStatus: selections.insulationStatus || "",
+        currentInsulation: selections.insulationStatus || "", // API compat
+        address: validAddress,
+        timeline: timeline,
+        contactTime: timeline, // API compat
+      },
+      utmParams,
+      eventId,
+    }
+
     try {
-      const res = await fetch("/api/leads", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          email: formData.email,
-          phone: formData.phone,
-          ville: villeSlug,
-          address: validAddress,
-          city: addressCity,
-          postalCode: addressPostalCode,
-          coordinates: addressCoordinates,
-          province: addressProvince,
-          source: "soumission-rapide",
-          leadType: "isolation_soumission_rapide",
-          userAnswers: {
-            habitationType: selections.habitationType || "",
-            projectType: selections.habitationType || "", // API compat
-            ownershipStatus: selections.ownershipStatus || "",
-            insulationStatus: selections.insulationStatus || "",
-            currentInsulation: selections.insulationStatus || "", // API compat
-            address: validAddress,
-            timeline: timeline,
-            contactTime: timeline, // API compat
-          },
-          utmParams,
-          eventId,
-        }),
-      })
+      if (OTP_ENABLED) {
+        // Defer the submission until OTP is verified; stash the payload
+        // so /soumission-rapide/verifier-telephone can POST it with the token.
+        sessionStorage.setItem("pending-lead", JSON.stringify(leadPayload))
+      } else {
+        const res = await fetch("/api/leads", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(leadPayload),
+        })
+        if (!res.ok) throw new Error(`leads api ${res.status}`)
+      }
 
-      if (!res.ok) throw new Error(`leads api ${res.status}`)
-      const result = await res.json()
-
-      // Meta Pixel — Lead event
+      // Meta Pixel — Lead event (fire client-side regardless of when the
+      // API call happens; final dedup via server-side eventId).
       if (typeof window.fbq === "function") {
         window.fbq("track", "Lead", {
           currency: "CAD",
@@ -368,7 +379,7 @@ function QuestionnaireContent() {
           phone: formData.phone,
           ville: cityName,
           villeSlug,
-          leadId: result.leadId,
+          leadId: clientLeadId,
           habitationType: selections.habitationType,
           address: validAddress,
           timeline,
@@ -653,13 +664,12 @@ function QuestionnaireContent() {
                   <label htmlFor="phone" className="text-[14px] text-[#375371] leading-[1.2] tracking-[-0.56px]">
                     Numéro de téléphone*
                   </label>
-                  <input
+                  <PhoneInput
                     id="phone"
-                    type="tel"
                     value={formData.phone}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+                    onChange={(value) => setFormData((prev) => ({ ...prev, phone: value }))}
                     disabled={isSubmittingLead}
-                    className="w-full bg-[#f6f8fb] border border-[#dbe0ec] rounded-[10px] h-[56px] px-[16px] text-[#002042] text-[16px] outline-none focus:border-[#aedee5] transition-colors placeholder:text-[#6c6c6c]"
+                    inputClassName="w-full bg-[#f6f8fb] border border-[#dbe0ec] rounded-[10px] h-[56px] px-[16px] text-[#002042] text-[16px] outline-none focus:border-[#aedee5] transition-colors placeholder:text-[#6c6c6c]"
                     style={{ fontFamily: "'Geist Mono', monospace", fontWeight: 500 }}
                     placeholder="(514) 555-5555"
                     required

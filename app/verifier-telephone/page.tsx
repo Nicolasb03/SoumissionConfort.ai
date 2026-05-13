@@ -6,7 +6,9 @@ import Link from "next/link"
 import { CheckCircle, Loader2 } from "lucide-react"
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
 
-type State = "sending" | "pending" | "confirming" | "verified" | "error"
+type State = "sending" | "pending" | "confirming" | "submitting" | "verified" | "error"
+
+const SEND_THROTTLE_MS = 60_000
 
 export default function VerifierTelephonePage() {
   const router = useRouter()
@@ -28,6 +30,9 @@ export default function VerifierTelephonePage() {
           hasSent.current = true
           setPhone(data.phone)
           if (data.redirectTo) setRedirectTo(data.redirectTo)
+          // Mark OTP flow as active so the funnel pages know not to re-stash
+          // a stale pending-lead if the user uses the browser back button.
+          sessionStorage.setItem("otp-flow-active", "1")
           sendOtp(data.phone)
           return
         }
@@ -38,6 +43,15 @@ export default function VerifierTelephonePage() {
   }, [])
 
   const sendOtp = async (phoneNumber: string) => {
+    // Throttle resends to avoid Twilio rate-limit 60203 on refresh/back.
+    const lastSentRaw = sessionStorage.getItem("otp-sent-at")
+    const lastSent = lastSentRaw ? parseInt(lastSentRaw, 10) : 0
+    const elapsed = Date.now() - lastSent
+    if (lastSent && elapsed < SEND_THROTTLE_MS) {
+      setState("pending")
+      return
+    }
+
     setState("sending")
     setErrorMessage("")
     setOtpExpired(false)
@@ -54,10 +68,49 @@ export default function VerifierTelephonePage() {
         setState("error")
         return
       }
+      sessionStorage.setItem("otp-sent-at", String(Date.now()))
       setState("pending")
     } catch {
       setErrorMessage("Erreur réseau. Veuillez réessayer.")
       setState("error")
+    }
+  }
+
+  const cleanupAndRedirect = (target: string) => {
+    sessionStorage.removeItem("pending-lead")
+    sessionStorage.removeItem("otp-verify")
+    sessionStorage.removeItem("otp-flow-active")
+    sessionStorage.removeItem("otp-sent-at")
+    router.push(target)
+  }
+
+  const submitDeferredLead = async (otpToken: string): Promise<{ ok: true } | { ok: true; noPending: true } | { ok: false; expired: boolean }> => {
+    const pendingRaw = sessionStorage.getItem("pending-lead")
+    if (!pendingRaw) return { ok: true, noPending: true }
+    let pending: Record<string, unknown>
+    try {
+      pending = JSON.parse(pendingRaw)
+    } catch {
+      return { ok: true, noPending: true }
+    }
+
+    try {
+      const res = await fetch("/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...pending, otpToken }),
+      })
+      if (res.ok) return { ok: true }
+
+      let code: string | undefined
+      try {
+        const body = await res.json()
+        code = body?.code
+      } catch { /* ignore */ }
+      return { ok: false, expired: code === "OTP_TOKEN_EXPIRED" }
+    } catch (err) {
+      console.error("verifier-telephone: lead submission failed", err)
+      return { ok: false, expired: false }
     }
   }
 
@@ -78,8 +131,24 @@ export default function VerifierTelephonePage() {
         setState("pending")
         return
       }
+
+      // OTP confirmed — now submit the deferred lead (if any).
+      setState("submitting")
+      const result = await submitDeferredLead(data.otpToken)
+      if (!result.ok) {
+        if (result.expired) {
+          setErrorMessage("Le code a expiré. Demandez-en un nouveau.")
+          setOtpExpired(true)
+          setState("pending")
+        } else {
+          setErrorMessage("Erreur lors de l'envoi. Veuillez recommencer.")
+          setState("error")
+        }
+        return
+      }
+
       setState("verified")
-      setTimeout(() => router.push(redirectTo), 800)
+      setTimeout(() => cleanupAndRedirect(redirectTo), 800)
     } catch {
       setErrorMessage("Erreur réseau. Veuillez réessayer.")
       setState("pending")
@@ -122,6 +191,8 @@ export default function VerifierTelephonePage() {
                 <p className="text-[18px] text-[#375371] leading-[1.2] tracking-[-0.72px] w-full">
                   {state === "sending"
                     ? "Envoi du code en cours..."
+                    : state === "submitting"
+                    ? "Confirmation et envoi à nos entrepreneurs..."
                     : (
                       <>
                         Un code de vérification a été envoyé par SMS au{" "}
@@ -134,7 +205,7 @@ export default function VerifierTelephonePage() {
                 </p>
               </div>
 
-              {state === "sending" && (
+              {(state === "sending" || state === "submitting") && (
                 <div className="flex justify-center py-[16px]">
                   <Loader2 className="w-8 h-8 animate-spin text-[#375371]" />
                 </div>
@@ -183,7 +254,10 @@ export default function VerifierTelephonePage() {
                   ) : (
                     <button
                       type="button"
-                      onClick={() => sendOtp(phone)}
+                      onClick={() => {
+                        sessionStorage.removeItem("otp-sent-at")
+                        sendOtp(phone)
+                      }}
                       className="w-full h-[56px] border-2 border-[#002042] text-[#002042] font-bold text-[18px] rounded-full px-[32px] hover:bg-[#eef5fc] transition-all"
                       style={{ fontFamily: "'Source Serif Pro', serif" }}
                     >
