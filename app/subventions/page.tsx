@@ -253,16 +253,28 @@ export default function SubventionsPage() {
       }
 
       if (OTP_ENABLED) {
-        // Defer /api/leads until OTP success on /verifier-telephone.
+        // Defer /api/leads until OTP success on /verifier-telephone, and
+        // route the user there IMMEDIATELY. Previous behaviour showed the
+        // eligibility result step with a CTA to OTP — but a user who
+        // bounced after seeing the result would silently lose their lead
+        // because no /api/leads call ever fired. Forcing the OTP step
+        // closes that gap. The result page still displays after OTP
+        // success (see /success), so the user still sees their outcome.
         sessionStorage.setItem("pending-lead", JSON.stringify(leadPayload))
-        sessionStorage.setItem("otp-verify", JSON.stringify({ phone: leadForm.phone, redirectTo: "/success" }))
-      } else {
-        await fetch("/api/leads", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(leadPayload),
-        })
+        sessionStorage.setItem(
+          "otp-verify",
+          JSON.stringify({ phone: leadForm.phone, redirectTo: "/success" }),
+        )
+        track("Subvention Lead Captured", { eligible })
+        router.push("/verifier-telephone")
+        return
       }
+
+      await fetch("/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(leadPayload),
+      })
 
       track("Subvention Lead Captured", { eligible })
     } catch (error) {
@@ -785,7 +797,7 @@ export default function SubventionsPage() {
                     {/* CTA 1: Agent éco-énergétique */}
                     <button
                       type="button"
-                      onClick={() => router.push(OTP_ENABLED ? "/verifier-telephone" : "/success")}
+                      onClick={() => router.push("/success")}
                       className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-5 px-8 rounded-2xl text-lg transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02]"
                     >
                       <div className="flex items-center justify-center gap-3">
@@ -859,7 +871,7 @@ export default function SubventionsPage() {
                   {/* CTA: Contact agent */}
                   <button
                     type="button"
-                    onClick={() => router.push(OTP_ENABLED ? "/verifier-telephone" : "/success")}
+                    onClick={() => router.push("/success")}
                     className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-5 px-8 rounded-2xl text-lg transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02]"
                   >
                     <div className="flex items-center justify-center gap-3">

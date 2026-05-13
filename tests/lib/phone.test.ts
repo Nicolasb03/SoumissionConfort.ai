@@ -19,14 +19,19 @@ describe("isValidQuebecPhone", () => {
     "1-514-555-1234",
     "1(514)555-1234",
     "  514-555-1234  ",
+    // All Quebec area codes
     "418-555-9999",
     "450-555-0000",
     "438-555-1111",
     "579-555-2222",
     "873-555-3333",
     "367-555-4444",
-    "263-555-5555",
-  ])("accepts valid Quebec/NANP number: %s", (input) => {
+    "581-555-1234",
+    "819-555-1234",
+    // Ottawa-Gatineau cross-border (Outaouais residents often have ON numbers)
+    "613-555-1234",
+    "343-555-1234",
+  ])("accepts valid Quebec / Outaouais number: %s", (input) => {
     expect(isValidQuebecPhone(input)).toBe(true)
   })
 
@@ -48,6 +53,14 @@ describe("isValidQuebecPhone", () => {
     null as unknown as string,
     undefined as unknown as string,
     123 as unknown as string,
+    // Non-Quebec / non-Outaouais NANP area codes should be rejected: typos
+    // or out-of-region numbers shouldn't pollute the CRM.
+    "212-555-1234", // New York
+    "415-555-1234", // San Francisco
+    "999-555-1234", // unassigned
+    "905-555-1234", // GTA Ontario (not Outaouais)
+    "604-555-1234", // Vancouver
+    "514-1abc-1234", // garbage in central office
   ])("rejects invalid input: %s", (input) => {
     expect(isValidQuebecPhone(input)).toBe(false)
   })
