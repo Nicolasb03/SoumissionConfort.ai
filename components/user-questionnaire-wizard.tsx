@@ -137,8 +137,10 @@ export function UserQuestionnaire({ roofData, onComplete }: UserQuestionnairePro
 
     // Deterministic per-user event_id so re-submissions within Meta's 48h
     // dedup window collapse to a single Lead. Hoisted outside the try so the
-    // fallback path below can reuse the exact same id.
-    const eventId = await computeLeadEventId(leadData.phone, leadData.email)
+    // fallback path below can reuse the exact same id. The wizard is the
+    // isolation entry point — `leadType` defaults to 'isolation' on the
+    // server when none is sent, so we stamp it explicitly here.
+    const eventId = await computeLeadEventId(leadData.phone, leadData.email, 'isolation')
 
     try {
       // First calculate pricing

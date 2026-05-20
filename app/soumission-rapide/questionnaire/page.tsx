@@ -313,7 +313,7 @@ function QuestionnaireContent() {
     submittingRef.current = true
 
     setIsSubmittingLead(true)
-    const eventId = await computeLeadEventId(formData.phone, formData.email)
+    const eventId = await computeLeadEventId(formData.phone, formData.email, "isolation_soumission_rapide")
 
     const clientLeadId = `LEAD${Date.now()}${Math.random().toString(36).substring(2, 10)}`
     const leadPayload = {

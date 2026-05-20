@@ -263,8 +263,10 @@ export default function ThermopompesPage() {
     const priceRange = getPriceRange(basePrice)
     
     // Deterministic per-user event_id so re-submissions within Meta's 48h
-    // dedup window collapse to a single Lead.
-    const eventId = await computeLeadEventId(data.phone, data.email);
+    // dedup window collapse to a single Lead. Vertical 'hvac' keeps
+    // thermopompe conversions distinct from the user's potential isolation
+    // events.
+    const eventId = await computeLeadEventId(data.phone, data.email, 'hvac');
 
     // Facebook Pixel tracking (client-side) — fire before API for reliability
     if (typeof window !== 'undefined' && (window as any).fbq) {

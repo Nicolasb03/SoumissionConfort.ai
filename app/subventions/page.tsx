@@ -229,7 +229,7 @@ export default function SubventionsPage() {
     setIsSubmittingLead(true)
 
     const { eligible, criteria } = computeEligibility(answers)
-    const eventId = await computeLeadEventId(leadForm.phone, leadForm.email)
+    const eventId = await computeLeadEventId(leadForm.phone, leadForm.email, "subvention")
 
     try {
       // Fire Meta Pixel (client-side) with shared eventId for dedup
