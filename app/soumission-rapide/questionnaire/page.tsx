@@ -11,6 +11,7 @@ import { useAddressAutocomplete } from "@/hooks/use-address-autocomplete"
 import { OTP_ENABLED } from "@/lib/feature-flags"
 import { PhoneInput } from "@/components/phone-input"
 import { isValidQuebecPhone } from "@/lib/phone"
+import { computeLeadEventId } from "@/lib/event-id"
 
 declare global {
   interface Window {
@@ -312,7 +313,7 @@ function QuestionnaireContent() {
     submittingRef.current = true
 
     setIsSubmittingLead(true)
-    const eventId = `lead_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+    const eventId = await computeLeadEventId(formData.phone, formData.email)
 
     const clientLeadId = `LEAD${Date.now()}${Math.random().toString(36).substring(2, 10)}`
     const leadPayload = {

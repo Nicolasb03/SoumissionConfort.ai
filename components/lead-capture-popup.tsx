@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -32,6 +32,10 @@ export interface LeadData {
 export function LeadCapturePopup({ isOpen, onClose, onSubmit, isSubmitting = false, roofData }: LeadCapturePopupProps) {
   const { t } = useLanguage()
   const [phoneError, setPhoneError] = useState<string | null>(null)
+  // Sync guard against same-tick double-clicks. React's `isSubmitting` prop
+  // only blocks the button AFTER the parent re-renders; without the ref a
+  // rapid 2nd click in the same tick still fires onSubmit twice.
+  const submittingRef = useRef(false)
   const [formData, setFormData] = useState<LeadData>({
     firstName: "",
     lastName: "",
@@ -39,16 +43,22 @@ export function LeadCapturePopup({ isOpen, onClose, onSubmit, isSubmitting = fal
     phone: "",
   })
 
+  // Reset the sync guard once the parent's async submission completes
+  // (isSubmitting flips back to false).
+  useEffect(() => {
+    if (!isSubmitting) submittingRef.current = false
+  }, [isSubmitting])
+
   const estimatedMaxSavings = roofData?.roofArea
     ? Math.round((roofData.roofArea / 2000) * 1200)
     : 1200
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (isFormValid()) {
-      track('Lead Submitted', { firstName: formData.firstName, email: formData.email })
-      onSubmit(formData)
-    }
+    if (submittingRef.current || isSubmitting || !isFormValid()) return
+    submittingRef.current = true
+    track('Lead Submitted', { firstName: formData.firstName, email: formData.email })
+    onSubmit(formData)
   }
 
   const isFormValid = () => {

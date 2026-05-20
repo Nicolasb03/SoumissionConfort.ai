@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { AddressInput } from "@/components/address-input"
 import { HowItWorks } from "@/components/how-it-works"
@@ -10,6 +10,7 @@ import { track } from "@vercel/analytics"
 import { OTP_ENABLED } from "@/lib/feature-flags"
 import { PhoneInput } from "@/components/phone-input"
 import { isValidQuebecPhone } from "@/lib/phone"
+import { computeLeadEventId } from "@/lib/event-id"
 import {
   Home,
   Building2,
@@ -138,6 +139,11 @@ export default function SubventionsPage() {
     insulation: "",
   })
   const [isSubmittingLead, setIsSubmittingLead] = useState(false)
+  // Sync guard against same-tick double-clicks on the submit button. The
+  // `isSubmittingLead` state only blocks rendering AFTER React re-renders;
+  // without this ref a 2nd click within the same tick still fires the
+  // handler twice.
+  const submittingRef = useRef(false)
   const [utmParams, setUtmParams] = useState<UTMParameters>({})
   const [leadForm, setLeadForm] = useState({
     firstName: "",
@@ -211,6 +217,7 @@ export default function SubventionsPage() {
 
   const handleLeadSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (submittingRef.current) return
     if (!isValidQuebecPhone(leadForm.phone)) {
       setPhoneError("Veuillez entrer un numéro de téléphone québécois valide (ex: 514-555-1234).")
       return
@@ -218,10 +225,11 @@ export default function SubventionsPage() {
     setPhoneError(null)
     if (!isLeadFormValid()) return
 
+    submittingRef.current = true
     setIsSubmittingLead(true)
 
     const { eligible, criteria } = computeEligibility(answers)
-    const eventId = crypto.randomUUID()
+    const eventId = await computeLeadEventId(leadForm.phone, leadForm.email)
 
     try {
       // Fire Meta Pixel (client-side) with shared eventId for dedup
@@ -278,6 +286,7 @@ export default function SubventionsPage() {
 
       track("Subvention Lead Captured", { eligible })
       setIsSubmittingLead(false)
+      submittingRef.current = false
       setStep("result")
     } catch (error) {
       console.error("Error submitting subvention lead:", error)
@@ -285,6 +294,7 @@ export default function SubventionsPage() {
       // user isn't stranded. The OTP-enabled path has already navigated away
       // via the early `return` above, so this branch never runs there.
       setIsSubmittingLead(false)
+      submittingRef.current = false
       setStep("result")
     }
   }

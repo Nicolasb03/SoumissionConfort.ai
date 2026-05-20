@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { LeadCapturePopup, type LeadData } from "@/components/lead-capture-popup"
 import { OTP_ENABLED } from "@/lib/feature-flags"
 import { AddressInput } from "@/components/address-input"
+import { computeLeadEventId } from "@/lib/event-id"
 import {
   Wind,
   Home,
@@ -261,8 +262,9 @@ export default function ThermopompesPage() {
     const basePrice = resolvedRec?.recommendation?.totalInvestment
     const priceRange = getPriceRange(basePrice)
     
-    // Generate shared eventId for client/server deduplication
-    const eventId = crypto.randomUUID();
+    // Deterministic per-user event_id so re-submissions within Meta's 48h
+    // dedup window collapse to a single Lead.
+    const eventId = await computeLeadEventId(data.phone, data.email);
 
     // Facebook Pixel tracking (client-side) — fire before API for reliability
     if (typeof window !== 'undefined' && (window as any).fbq) {

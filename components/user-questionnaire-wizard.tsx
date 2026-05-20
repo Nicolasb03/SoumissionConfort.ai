@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { LeadCapturePopup, type LeadData } from "@/components/lead-capture-popup"
 import { getCurrentUTMParameters, type UTMParameters } from "@/lib/utm-utils"
 import { OTP_ENABLED } from "@/lib/feature-flags"
+import { computeLeadEventId } from "@/lib/event-id"
 import { ArrowLeft, Check, CheckCircle, Smile } from "lucide-react"
 import { track } from '@vercel/analytics'
 
@@ -134,6 +135,11 @@ export function UserQuestionnaire({ roofData, onComplete }: UserQuestionnairePro
   const handleLeadSubmit = async (leadData: LeadData) => {
     setIsSubmittingLead(true)
 
+    // Deterministic per-user event_id so re-submissions within Meta's 48h
+    // dedup window collapse to a single Lead. Hoisted outside the try so the
+    // fallback path below can reuse the exact same id.
+    const eventId = await computeLeadEventId(leadData.phone, leadData.email)
+
     try {
       // First calculate pricing
       let pricingData = null
@@ -195,9 +201,6 @@ export function UserQuestionnaire({ roofData, onComplete }: UserQuestionnairePro
           }
         }
       }
-
-      // Generate shared eventId for client/server deduplication
-      const eventId = crypto.randomUUID();
 
       // Fire Meta Pixel event (client-side)
       if (typeof window.fbq === 'function' && pricingData?.ranges?.standard) {
@@ -314,6 +317,7 @@ export function UserQuestionnaire({ roofData, onComplete }: UserQuestionnairePro
         userAnswers: answers,
         pricingData: fallbackPricing,
         utmParams,
+        eventId,
       }
       if (OTP_ENABLED) {
         sessionStorage.setItem('pending-lead', JSON.stringify(fallbackPayload))

@@ -59,6 +59,18 @@ TWILIO_VERIFY_SERVICE_SID=
 
 
 # ============================================================================
+# SUPABASE (audit trail for /api/leads)
+# ============================================================================
+
+# Same Supabase project as powerflow-geofencing. Enables the leads_audit
+# insert (best-effort; if either var is unset, the audit is silently skipped
+# and the lead flow continues unchanged). Apply the migration in
+# supabase/migrations/2026-05-20_leads_audit.sql once per environment.
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+
+
+# ============================================================================
 # AUTRES
 # ============================================================================
 

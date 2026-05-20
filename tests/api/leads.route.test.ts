@@ -13,11 +13,28 @@ vi.mock("@/lib/ghl-client", () => ({
   postLeadToGHL: ghlMocks.postLeadToGHL,
 }))
 
-const metaMocks = vi.hoisted(() => ({
-  initializeMetaConversionAPI: vi.fn(() => ({ trackLead: vi.fn() })),
-}))
+const metaMocks = vi.hoisted(() => {
+  const trackLead = vi.fn()
+  return {
+    trackLead,
+    initializeMetaConversionAPI: vi.fn(() => ({ trackLead })),
+  }
+})
 vi.mock("@/lib/meta-conversion-api", () => ({
   initializeMetaConversionAPI: metaMocks.initializeMetaConversionAPI,
+}))
+
+const supabaseMocks = vi.hoisted(() => {
+  const insert = vi.fn().mockResolvedValue({ data: null, error: null })
+  const from = vi.fn(() => ({ insert }))
+  return {
+    insert,
+    from,
+    getSupabaseAdmin: vi.fn(() => ({ from })),
+  }
+})
+vi.mock("@/lib/supabase", () => ({
+  getSupabaseAdmin: supabaseMocks.getSupabaseAdmin,
 }))
 
 const TEST_SECRET = "a".repeat(64)
@@ -182,5 +199,118 @@ describe("/api/leads — phone validation + OTP gate", () => {
     expect(res.status).toBe(500)
     const body = await res.json()
     expect(body.code).toBe("OTP_TOKEN_MISCONFIGURED")
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Meta lead_status + Supabase audit tests
+// ─────────────────────────────────────────────────────────────────────────────
+describe("/api/leads — Meta lead_status + Supabase audit", () => {
+  beforeEach(() => {
+    vi.resetModules()
+    vi.stubEnv("OTP_SIGNING_SECRET", TEST_SECRET)
+    vi.stubEnv("NEXT_PUBLIC_OTP_ENABLED", "true")
+    vi.stubEnv("GHL_ENABLED", "true")
+    // Required for the Meta CAPI block inside the GHL branch to actually run
+    vi.stubEnv("NEXT_PUBLIC_META_PIXEL_ID", "pixel_test")
+    vi.stubEnv("META_CONVERSION_ACCESS_TOKEN", "capi_test")
+    vi.stubEnv("SUPABASE_URL", "https://test.supabase.co")
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "service_test_key")
+    ghlMocks.isGHLEnabled.mockReturnValue(true)
+    // Default: brand-new contact (not a duplicate upsert)
+    ghlMocks.postLeadToGHL.mockResolvedValue({
+      contactId: "ghl_abc",
+      duplicate: false,
+      contactStatus: 200,
+    })
+    // Reset mocks so each test gets clean call counts
+    supabaseMocks.insert.mockClear()
+    supabaseMocks.from.mockClear()
+    supabaseMocks.getSupabaseAdmin.mockClear()
+    supabaseMocks.insert.mockResolvedValue({ data: null, error: null })
+    metaMocks.trackLead.mockClear()
+    metaMocks.trackLead.mockResolvedValue({ success: true })
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.clearAllMocks()
+  })
+
+  it("sets custom_data.lead_status='new' when GHL returns duplicate=false", async () => {
+    const token = await signOtpToken("514-555-1234")
+    const { POST } = await import("../../app/api/leads/route")
+    const res = await POST(
+      buildRequest({ ...baseHVACBody, otpToken: token, eventId: "evt_unique_1" }) as any,
+    )
+    expect(res.status).toBe(200)
+    expect(metaMocks.trackLead).toHaveBeenCalledTimes(1)
+    const call = metaMocks.trackLead.mock.calls[0][0]
+    expect(call.customData).toMatchObject({ lead_status: "new" })
+    expect(call.eventId).toBe("evt_unique_1")
+  })
+
+  it("sets custom_data.lead_status='duplicate' when GHL returns duplicate=true (upsert-merged)", async () => {
+    ghlMocks.postLeadToGHL.mockResolvedValueOnce({
+      contactId: "ghl_existing",
+      duplicate: true,
+      contactStatus: 200,
+    })
+    const token = await signOtpToken("514-555-1234")
+    const { POST } = await import("../../app/api/leads/route")
+    const res = await POST(
+      buildRequest({ ...baseHVACBody, otpToken: token, eventId: "evt_dup_1" }) as any,
+    )
+    expect(res.status).toBe(200)
+    const call = metaMocks.trackLead.mock.calls[0][0]
+    expect(call.customData).toMatchObject({ lead_status: "duplicate" })
+  })
+
+  it("inserts a row in leads_audit with ghl_new=true on a new contact", async () => {
+    const token = await signOtpToken("514-555-1234")
+    const { POST } = await import("../../app/api/leads/route")
+    await POST(buildRequest({ ...baseHVACBody, otpToken: token, eventId: "evt_audit_new" }) as any)
+
+    expect(supabaseMocks.from).toHaveBeenCalledWith("leads_audit")
+    expect(supabaseMocks.insert).toHaveBeenCalledTimes(1)
+    const row = supabaseMocks.insert.mock.calls[0][0]
+    expect(row).toMatchObject({
+      vertical: "hvac",
+      phone_e164: "+15145551234",
+      email: "z@example.com",
+      meta_event_id: "evt_audit_new",
+      ghl_contact_id: "ghl_abc",
+      ghl_new: true,
+      ghl_status_code: 200,
+    })
+  })
+
+  it("inserts a row in leads_audit with ghl_new=false on a duplicate upsert", async () => {
+    ghlMocks.postLeadToGHL.mockResolvedValueOnce({
+      contactId: "ghl_existing",
+      duplicate: true,
+      contactStatus: 200,
+    })
+    const token = await signOtpToken("514-555-1234")
+    const { POST } = await import("../../app/api/leads/route")
+    await POST(buildRequest({ ...baseHVACBody, otpToken: token, eventId: "evt_audit_dup" }) as any)
+
+    expect(supabaseMocks.insert).toHaveBeenCalledTimes(1)
+    expect(supabaseMocks.insert.mock.calls[0][0]).toMatchObject({
+      ghl_new: false,
+      ghl_contact_id: "ghl_existing",
+    })
+  })
+
+  it("a Supabase insert failure does NOT fail the lead submission", async () => {
+    supabaseMocks.insert.mockRejectedValueOnce(new Error("db unreachable"))
+    const token = await signOtpToken("514-555-1234")
+    const { POST } = await import("../../app/api/leads/route")
+    const res = await POST(buildRequest({ ...baseHVACBody, otpToken: token }) as any)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.success).toBe(true)
+    // Meta CAPI should still fire even when audit fails
+    expect(metaMocks.trackLead).toHaveBeenCalledTimes(1)
   })
 })
