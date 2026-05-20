@@ -302,7 +302,7 @@ describe("/api/leads — Meta lead_status + Supabase audit", () => {
     })
   })
 
-  it("a Supabase insert failure does NOT fail the lead submission", async () => {
+  it("a Supabase insert failure (throw) does NOT fail the lead submission", async () => {
     supabaseMocks.insert.mockRejectedValueOnce(new Error("db unreachable"))
     const token = await signOtpToken("514-555-1234")
     const { POST } = await import("../../app/api/leads/route")
@@ -311,6 +311,21 @@ describe("/api/leads — Meta lead_status + Supabase audit", () => {
     const body = await res.json()
     expect(body.success).toBe(true)
     // Meta CAPI should still fire even when audit fails
+    expect(metaMocks.trackLead).toHaveBeenCalledTimes(1)
+  })
+
+  it("a Supabase PostgREST error (resolved with { error }) does NOT fail the lead submission", async () => {
+    // PostgREST resolves with { data: null, error: {...} } on RLS/schema/missing-migration
+    // issues — does NOT throw. Make sure the route handles this without bubbling.
+    supabaseMocks.insert.mockResolvedValueOnce({
+      data: null,
+      error: { message: "relation \"leads_audit\" does not exist", code: "42P01" },
+    })
+    const token = await signOtpToken("514-555-1234")
+    const { POST } = await import("../../app/api/leads/route")
+    const res = await POST(buildRequest({ ...baseHVACBody, otpToken: token }) as any)
+    expect(res.status).toBe(200)
+    expect((await res.json()).success).toBe(true)
     expect(metaMocks.trackLead).toHaveBeenCalledTimes(1)
   })
 })

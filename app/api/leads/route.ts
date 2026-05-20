@@ -250,14 +250,20 @@ export async function POST(request: NextRequest) {
         const ghlResult = await postLeadToGHL(ghlPayload)
         console.log('🟢 LEADS API: GHL post result:', ghlResult)
 
-        // Fire-and-forget Supabase audit. Captures every /api/leads attempt
-        // (success, duplicate-upsert, and error) so Meta count can be
-        // reconciled against new-vs-duplicate GHL outcomes after the fact.
-        // Never blocks the user response.
+        // Supabase audit for the GHL branch: captures GHL outcomes (new,
+        // duplicate-upsert, contactError) so Meta count can be reconciled
+        // post-fact. Best-effort and non-blocking on errors: failures are
+        // logged but never bubble up to the user response. Note: the legacy
+        // Make-webhook branch and pre-GHL early returns (OTP/phone) are NOT
+        // audited yet.
         try {
           const supabase = getSupabaseAdmin()
           if (supabase) {
-            await supabase.from('leads_audit').insert({
+            // PostgREST returns errors via the `error` field rather than
+            // throwing — RLS denial, missing migration, schema mismatch, etc.
+            // all surface here. Inspect it explicitly so a silently-dropped
+            // audit isn't invisible.
+            const { error: auditError } = await supabase.from('leads_audit').insert({
               lead_id: leadId,
               vertical,
               phone_e164: leadData.phone,
@@ -271,9 +277,12 @@ export async function POST(request: NextRequest) {
               utm_campaign: utmParams.utm_campaign ?? null,
               fbclid: utmParams.fbclid ?? null,
             })
+            if (auditError) {
+              console.error('⚠️ LEADS API: Supabase audit error (non-fatal):', auditError)
+            }
           }
         } catch (auditErr) {
-          console.error('⚠️ LEADS API: Supabase audit insert failed (non-fatal):', auditErr)
+          console.error('⚠️ LEADS API: Supabase audit insert threw (non-fatal):', auditErr)
         }
 
         if (!ghlResult.contactId) {
