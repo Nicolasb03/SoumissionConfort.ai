@@ -280,6 +280,27 @@ export async function postLeadToGHL(lead: NormalizedLead): Promise<GHLPostResult
     })
   }
 
+  // For returning leads, /contacts/upsert is a no-op on the tag if it's
+  // already present, so GHL emits no "Tag Added" event and the workflow
+  // ("Lead Assignment and SMS optin" — opportunity create + setter assign +
+  // Slack + SMS opt-in) never re-fires. Toggle the tag off→on to re-fire it.
+  // Requires the workflow's "Allow re-entry" setting to be ON.
+  if (contactId && duplicate) {
+    const workflowTag = VERTICAL_TAG[lead.vertical]
+    await ghlRequest(apiKey, `/contacts/${contactId}/tags`, {
+      method: 'DELETE',
+      body: JSON.stringify({ tags: [workflowTag] }),
+    })
+    await ghlRequest(apiKey, `/contacts/${contactId}/tags`, {
+      method: 'POST',
+      body: JSON.stringify({ tags: [workflowTag] }),
+    })
+    console.log(
+      `[ghl-client] Re-fired workflow trigger for returning lead contactId=${contactId} ` +
+        `vertical=${lead.vertical} tag="${workflowTag}"`,
+    )
+  }
+
   return { contactId, duplicate, contactStatus: created.status }
 }
 
