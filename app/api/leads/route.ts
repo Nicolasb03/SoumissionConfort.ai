@@ -3,6 +3,7 @@ import { initializeMetaConversionAPI } from "@/lib/meta-conversion-api"
 import { isGHLEnabled, postLeadToGHL, type LeadVertical, type NormalizedLead } from "@/lib/ghl-client"
 import { isValidQuebecPhone, normalizePhone } from "@/lib/phone"
 import { verifyOtpToken } from "@/lib/otp-token"
+import { getSupabaseAdmin } from "@/lib/supabase"
 
 console.log('🔥🔥🔥 LEADS API FILE LOADED - THIS SHOULD SHOW ON SERVER START 🔥🔥🔥')
 
@@ -249,6 +250,41 @@ export async function POST(request: NextRequest) {
         const ghlResult = await postLeadToGHL(ghlPayload)
         console.log('🟢 LEADS API: GHL post result:', ghlResult)
 
+        // Supabase audit for the GHL branch: captures GHL outcomes (new,
+        // duplicate-upsert, contactError) so Meta count can be reconciled
+        // post-fact. Best-effort and non-blocking on errors: failures are
+        // logged but never bubble up to the user response. Note: the legacy
+        // Make-webhook branch and pre-GHL early returns (OTP/phone) are NOT
+        // audited yet.
+        try {
+          const supabase = getSupabaseAdmin()
+          if (supabase) {
+            // PostgREST returns errors via the `error` field rather than
+            // throwing — RLS denial, missing migration, schema mismatch, etc.
+            // all surface here. Inspect it explicitly so a silently-dropped
+            // audit isn't invisible.
+            const { error: auditError } = await supabase.from('leads_audit').insert({
+              lead_id: leadId,
+              vertical,
+              phone_e164: leadData.phone,
+              email: leadData.email,
+              meta_event_id: leadData.eventId ?? null,
+              ghl_contact_id: ghlResult.contactId,
+              ghl_new: ghlResult.contactId ? !ghlResult.duplicate : null,
+              ghl_status_code: ghlResult.contactStatus,
+              ghl_error: ghlResult.contactError ?? null,
+              utm_source: utmParams.utm_source ?? null,
+              utm_campaign: utmParams.utm_campaign ?? null,
+              fbclid: utmParams.fbclid ?? null,
+            })
+            if (auditError) {
+              console.error('⚠️ LEADS API: Supabase audit error (non-fatal):', auditError)
+            }
+          }
+        } catch (auditErr) {
+          console.error('⚠️ LEADS API: Supabase audit insert threw (non-fatal):', auditErr)
+        }
+
         if (!ghlResult.contactId) {
           console.error('❌ LEADS API: GHL contact creation failed', ghlResult.contactError)
           return NextResponse.json(
@@ -309,9 +345,12 @@ export async function POST(request: NextRequest) {
               userAgent,
               sourceUrl: `${origin}${sourcePath}`,
               eventId: leadData.eventId || undefined,
-              customData: { service_type: serviceType },
+              customData: {
+                service_type: serviceType,
+                lead_status: ghlResult.duplicate ? 'duplicate' : 'new',
+              },
             })
-            console.log(`✅ LEADS API: Meta CAPI event sent (GHL branch, ${serviceType})`)
+            console.log(`✅ LEADS API: Meta CAPI event sent (GHL branch, ${serviceType}, lead_status=${ghlResult.duplicate ? 'duplicate' : 'new'})`)
           } else {
             console.warn('⚠️ LEADS API: Meta CAPI not configured (GHL branch)')
           }
@@ -804,7 +843,8 @@ export async function POST(request: NextRequest) {
               sourceUrl: `${origin}${sourcePath}`,
               eventId: leadData.eventId || undefined,
               customData: {
-                service_type: serviceType
+                service_type: serviceType,
+                lead_status: 'new',
               }
             })
             

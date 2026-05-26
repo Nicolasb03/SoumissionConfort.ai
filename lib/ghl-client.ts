@@ -226,7 +226,20 @@ export interface GHLPostResult {
  */
 export async function postLeadToGHL(lead: NormalizedLead): Promise<GHLPostResult> {
   const { apiKey, locationId, fields } = getGHLConfig(lead.vertical)
-  if (!apiKey || !locationId) {
+  // Trim before truthy-check — Vercel env vars saved as "" or "   " (empty
+  // paste, copy that drops the value) show as "Encrypted" in the UI but are
+  // functionally missing. Without this guard the upsert posts with an empty
+  // Authorization header and GHL 401s without context. The CRITICAL marker
+  // is searchable in Vercel log drains so an alert can fire.
+  const apiKeyOk = typeof apiKey === 'string' && apiKey.trim().length > 0
+  const locationIdOk = typeof locationId === 'string' && locationId.trim().length > 0
+  if (!apiKeyOk || !locationIdOk) {
+    console.error(
+      `🚨 CRITICAL_CONFIG_MISSING 🚨 GHL credentials missing for vertical=${lead.vertical} ` +
+        `(apiKey=${apiKeyOk ? 'SET' : 'EMPTY'}, locationId=${locationIdOk ? 'SET' : 'EMPTY'}). ` +
+        `Lead LOST: email=${lead.email}, phone=${lead.phone}, leadId=${lead.internalLeadId ?? 'none'}. ` +
+        `Fix: check Vercel env vars ${lead.vertical === 'hvac' || lead.vertical === 'roofing' ? 'GHL_API_KEY + GHL_LOCATION_ID' : 'GHL_API_KEY_ISO + GHL_LOCATION_ID_ISO'}.`,
+    )
     return {
       contactId: null,
       duplicate: false,
@@ -265,6 +278,27 @@ export async function postLeadToGHL(lead: NormalizedLead): Promise<GHLPostResult
       method: 'POST',
       body: JSON.stringify({ body: lead.noteBody }),
     })
+  }
+
+  // For returning leads, /contacts/upsert is a no-op on the tag if it's
+  // already present, so GHL emits no "Tag Added" event and the workflow
+  // ("Lead Assignment and SMS optin" — opportunity create + setter assign +
+  // Slack + SMS opt-in) never re-fires. Toggle the tag off→on to re-fire it.
+  // Requires the workflow's "Allow re-entry" setting to be ON.
+  if (contactId && duplicate) {
+    const workflowTag = VERTICAL_TAG[lead.vertical]
+    await ghlRequest(apiKey, `/contacts/${contactId}/tags`, {
+      method: 'DELETE',
+      body: JSON.stringify({ tags: [workflowTag] }),
+    })
+    await ghlRequest(apiKey, `/contacts/${contactId}/tags`, {
+      method: 'POST',
+      body: JSON.stringify({ tags: [workflowTag] }),
+    })
+    console.log(
+      `[ghl-client] Re-fired workflow trigger for returning lead contactId=${contactId} ` +
+        `vertical=${lead.vertical} tag="${workflowTag}"`,
+    )
   }
 
   return { contactId, duplicate, contactStatus: created.status }
