@@ -226,7 +226,20 @@ export interface GHLPostResult {
  */
 export async function postLeadToGHL(lead: NormalizedLead): Promise<GHLPostResult> {
   const { apiKey, locationId, fields } = getGHLConfig(lead.vertical)
-  if (!apiKey || !locationId) {
+  // Trim before truthy-check — Vercel env vars saved as "" or "   " (empty
+  // paste, copy that drops the value) show as "Encrypted" in the UI but are
+  // functionally missing. Without this guard the upsert posts with an empty
+  // Authorization header and GHL 401s without context. The CRITICAL marker
+  // is searchable in Vercel log drains so an alert can fire.
+  const apiKeyOk = typeof apiKey === 'string' && apiKey.trim().length > 0
+  const locationIdOk = typeof locationId === 'string' && locationId.trim().length > 0
+  if (!apiKeyOk || !locationIdOk) {
+    console.error(
+      `🚨 CRITICAL_CONFIG_MISSING 🚨 GHL credentials missing for vertical=${lead.vertical} ` +
+        `(apiKey=${apiKeyOk ? 'SET' : 'EMPTY'}, locationId=${locationIdOk ? 'SET' : 'EMPTY'}). ` +
+        `Lead LOST: email=${lead.email}, phone=${lead.phone}, leadId=${lead.internalLeadId ?? 'none'}. ` +
+        `Fix: check Vercel env vars ${lead.vertical === 'hvac' || lead.vertical === 'roofing' ? 'GHL_API_KEY + GHL_LOCATION_ID' : 'GHL_API_KEY_ISO + GHL_LOCATION_ID_ISO'}.`,
+    )
     return {
       contactId: null,
       duplicate: false,
