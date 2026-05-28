@@ -486,17 +486,35 @@ function QuestionnaireContent() {
     : "Pas d'engagement — un conseiller peut te contacter si tu veux pousser plus loin."
   const submitLabel = isQualifiedIntent ? "Recevoir mes 3 soumissions" : "Voir mon estimation"
 
+  // Grenier hero photo only appears on the first question (address), the same
+  // way the landing page hero shows it — after Q1 we drop back to the cream
+  // background used by the rest of the funnel.
+  const showHeroPhoto = currentStepCfg.type === "address" && !showLeadForm
+
   return (
     <div
-      className="min-h-screen bg-[#FFFFF6] flex flex-col items-center"
+      className="min-h-screen bg-[#FFFFF6] flex flex-col items-center relative overflow-hidden"
       style={{ fontFamily: "'Source Serif Pro', Georgia, serif" }}
     >
+      {showHeroPhoto && (
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          <img
+            src="/images/Soumissioconfort-hero.jpeg"
+            alt=""
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-[#002042]/55" />
+        </div>
+      )}
+
       {/* Header */}
-      <div className="w-full px-4 lg:px-[60px] py-4">
+      <div className="w-full px-4 lg:px-[60px] py-4 relative z-10">
         <Link href="/" className="flex items-center gap-3">
           <img src="/images/logo-icon.svg" alt="" className="h-[48px] md:h-[62px] w-auto" />
           <div
-            className="font-bold text-[#002042] leading-[0.9] tracking-[-0.04em] text-[18px] md:text-[26px]"
+            className={`font-bold leading-[0.9] tracking-[-0.04em] text-[18px] md:text-[26px] ${
+              showHeroPhoto ? "text-white" : "text-[#002042]"
+            }`}
             style={{ fontFamily: "'Radio Canada Big', sans-serif" }}
           >
             <p>Soumission</p>
@@ -506,7 +524,7 @@ function QuestionnaireContent() {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 w-full max-w-[700px] px-4 pb-20 flex flex-col gap-[32px] items-center">
+      <div className="flex-1 w-full max-w-[700px] px-4 pb-20 flex flex-col gap-[32px] items-center relative z-10">
         {!showLeadForm && (
           <div className="bg-[#aedee5] flex gap-[4px] items-center justify-center px-[16px] py-[10px] rounded-full shadow-[0px_4px_4px_0px_rgba(0,0,0,0.25)]">
             <p
