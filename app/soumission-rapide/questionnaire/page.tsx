@@ -383,18 +383,24 @@ function QuestionnaireContent() {
       source: "soumission-rapide",
       leadType: "isolation_soumission_rapide",
       userAnswers: {
-        // Funnel V2 fields
+        // Funnel V2 fields (canonical — Phase 2 will map these to dedicated
+        // GHL custom fields)
         symptoms,
         hydroBracket,
         intent,
         address: validAddress,
         timeline,
-        // API compat — neutral defaults for legacy backend fields
+        // Phase 1 bridge: map V2 answers into the legacy fields that
+        // `/api/leads` already forwards to GHL/Make, so setters don't see
+        // empty qualification data during the Phase 1 → Phase 2 transition.
+        // (Codex review #19: preserve V2 answers in lead payloads.)
+        problems: symptoms.length > 0 ? symptoms.join(",") : "",
+        currentInsulation: hydroBracket, // proxy: high bracket ≈ bad insulation
+        projectType: intent === "qualified" ? "amelioration" : "exploring",
+        // Neutral defaults for unused legacy fields
         habitationType: "unifamiliale",
-        projectType: "unifamiliale",
         ownershipStatus: "proprietaire",
         insulationStatus: "inconnue",
-        currentInsulation: "inconnue",
         contactTime: timeline,
       },
       utmParams,
