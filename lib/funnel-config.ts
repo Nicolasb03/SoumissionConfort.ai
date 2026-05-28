@@ -59,3 +59,23 @@ export function mapV2SymptomsToV1(v2Symptoms: readonly string[]): string[] {
   const v1 = v2Symptoms.map((s) => map[s]).filter(Boolean)
   return v1.length ? Array.from(new Set(v1)) : ['aucun']
 }
+
+// V1-shaped answers built from V2 answers + conservative defaults. Used both by
+// LeadCaptureForm (to compute pricingData submitted to /api/leads) and by
+// /analysis state="pricing" (to render InsulationResults with the same inputs
+// so the displayed estimate matches the one stored in GHL).
+export interface V1AnswersForPricing {
+  heatingSystem: string
+  currentInsulation: string
+  atticAccess: string
+  identifiedProblems: string[]
+}
+
+export function buildV1AnswersFromV2(v2: V2Answers): V1AnswersForPricing {
+  return {
+    heatingSystem: 'electricite',
+    currentInsulation: 'partielle',
+    atticAccess: 'facile',
+    identifiedProblems: mapV2SymptomsToV1(v2.symptoms),
+  }
+}

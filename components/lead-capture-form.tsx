@@ -9,7 +9,7 @@ import { OTP_ENABLED } from "@/lib/feature-flags"
 import { PhoneInput } from "@/components/phone-input"
 import { isValidQuebecPhone } from "@/lib/phone"
 import { getCurrentUTMParameters, type UTMParameters } from "@/lib/utm-utils"
-import { mapV2SymptomsToV1, type V2Answers } from "@/lib/funnel-config"
+import { buildV1AnswersFromV2, type V2Answers } from "@/lib/funnel-config"
 import { calculateInsulationPricing } from "@/lib/insulation-calculator"
 
 declare global {
@@ -30,16 +30,6 @@ interface LeadCaptureFormProps {
   roofData: any
   v2Answers: V2Answers
   onComplete: (pricingData: any, leadData: LeadData, leadId: string) => void
-}
-
-function buildV1AnswersForPricing(v2: V2Answers) {
-  return {
-    // V1 defaults conservateurs — pricing reste générique sur ces axes Phase 1.
-    heatingSystem: 'electricite',
-    currentInsulation: 'partielle',
-    atticAccess: 'facile',
-    identifiedProblems: mapV2SymptomsToV1(v2.symptoms),
-  }
 }
 
 export function LeadCaptureForm({ roofData, v2Answers, onComplete }: LeadCaptureFormProps) {
@@ -80,7 +70,7 @@ export function LeadCaptureForm({ roofData, v2Answers, onComplete }: LeadCapture
 
     track('Lead Form Submitted', { intent: v2Answers.intent })
 
-    const v1ForPricing = buildV1AnswersForPricing(v2Answers)
+    const v1ForPricing = buildV1AnswersFromV2(v2Answers)
     const clientLeadId = `LEAD${Date.now()}${Math.random().toString(36).substring(2, 10)}`
     const eventId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
       ? crypto.randomUUID()
@@ -129,8 +119,14 @@ export function LeadCaptureForm({ roofData, v2Answers, onComplete }: LeadCapture
       eventId,
     }
 
-    // Fire Meta browser Lead pixel — Phase 2 will gate this by intent === 'qualified'.
-    if (typeof window !== 'undefined' && typeof window.fbq === 'function' && pricingData?.ranges?.standard) {
+    // Fire Meta browser Lead pixel ONLY for qualified intent — curious leads
+    // pollute the optim audience. Server CAPI is similarly gated Phase 2 in /api/leads.
+    if (
+      v2Answers.intent === 'qualified' &&
+      typeof window !== 'undefined' &&
+      typeof window.fbq === 'function' &&
+      pricingData?.ranges?.standard
+    ) {
       const range = pricingData.ranges.standard
       const estimatedValue = (range.totalCost.min + range.totalCost.max) / 2
       window.fbq('track', 'Lead', {

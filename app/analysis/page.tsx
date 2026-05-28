@@ -8,7 +8,7 @@ import { LeadCaptureForm, type LeadData } from "@/components/lead-capture-form"
 import { useLanguage } from "@/lib/language-context"
 import { ArrowLeft, MapPin, Zap, Clock, CheckCircle, Pencil, Check } from 'lucide-react'
 import Link from "next/link"
-import type { V2Answers } from "@/lib/funnel-config"
+import { buildV1AnswersFromV2, type V2Answers } from "@/lib/funnel-config"
 
 type AnalysisStep = "loading" | "results" | "questionnaire" | "lead-capture" | "pricing"
 
@@ -295,7 +295,7 @@ export default function AnalysisPage() {
         {currentStep === "pricing" && roofData && userAnswers && leadData && (
           <InsulationResults
             roofData={roofData}
-            userAnswers={userAnswers}
+            userAnswers={buildV1AnswersFromV2(userAnswers)}
             leadData={leadData}
             onComplete={() => router.push("/success")}
           />
