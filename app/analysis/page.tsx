@@ -4,16 +4,11 @@ import { useSearchParams, useRouter } from "next/navigation"
 import { useState, useEffect, useMemo } from "react"
 import { UserQuestionnaire } from "@/components/user-questionnaire-wizard"
 import { InsulationResults } from "@/components/insulation-results"
-import { LeadCaptureForm } from "@/components/lead-capture-form"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
-import { Badge } from "@/components/ui/badge"
+import { LeadCaptureForm, type LeadData } from "@/components/lead-capture-form"
 import { useLanguage } from "@/lib/language-context"
-import { OTP_ENABLED } from "@/lib/feature-flags"
 import { ArrowLeft, MapPin, Zap, Clock, CheckCircle, Pencil, Check } from 'lucide-react'
 import Link from "next/link"
-import type { LeadData } from "@/components/lead-capture-popup"
-import { Analytics } from "@vercel/analytics/next"
+import type { V2Answers } from "@/lib/funnel-config"
 
 type AnalysisStep = "loading" | "results" | "questionnaire" | "lead-capture" | "pricing"
 
@@ -25,9 +20,9 @@ export default function AnalysisPage() {
   // State declarations need to come before effects to avoid TDZ errors
   const [currentStep, setCurrentStep] = useState<AnalysisStep>("loading")
   const [roofData, setRoofData] = useState<any>(null)
-  const [userAnswers, setUserAnswers] = useState<any>(null)
+  const [userAnswers, setUserAnswers] = useState<V2Answers | null>(null)
   const [leadData, setLeadData] = useState<LeadData | null>(null)
-  const [pricingData, setPricingData] = useState<any>(null)
+  const [, setPricingData] = useState<any>(null)
   const [hasAnalyzed, setHasAnalyzed] = useState(false)
   const [isEditingArea, setIsEditingArea] = useState(false)
   const [areaInputValue, setAreaInputValue] = useState("")
@@ -50,8 +45,14 @@ export default function AnalysisPage() {
   const dataParam = useMemo(() => searchParams.get("data"), [searchParams])
 
   useEffect(() => {
-    // Ensure we're on the client side and have an address
-    if (typeof window === 'undefined' || hasAnalyzed || !address) return
+    // SSR guard
+    if (typeof window === 'undefined') return
+    // No address in URL → redirect home (P1-6 — prevents infinite spinner).
+    if (!address) {
+      router.push('/')
+      return
+    }
+    if (hasAnalyzed) return
 
     const analyzeRoof = async () => {
       setHasAnalyzed(true)
@@ -125,7 +126,7 @@ export default function AnalysisPage() {
     }, 100)
 
     return () => clearTimeout(timeoutId)
-  }, [address, dataParam, hasAnalyzed])
+  }, [address, dataParam, hasAnalyzed, router])
 
   const getStepProgress = () => {
     switch (currentStep) {
@@ -159,47 +160,16 @@ export default function AnalysisPage() {
     }
   }
 
-  const handleQuestionnaireComplete = async (answers: any, capturedLeadData: LeadData, pricingData: any) => {
+  // V2 flow: wizard hands off answers only; pricing + API + OTP happen in
+  // LeadCaptureForm. State machine: questionnaire → lead-capture → pricing.
+  const handleQuestionnaireComplete = (answers: V2Answers) => {
     setUserAnswers(answers)
-    setLeadData(capturedLeadData)
-    setPricingData(pricingData)
-
-    // Store pricing data in sessionStorage and redirect to /pricing page
-    const leadId = capturedLeadData.leadId
-    if (leadId) {
-      try {
-        const ctx = { roofData, userAnswers: answers, leadData: capturedLeadData }
-        sessionStorage.setItem('pricingContext', JSON.stringify(ctx))
-        // Also encode minimal non-PII data in URL for resilience (refresh, new tab)
-        const urlData = btoa(JSON.stringify({
-          roofArea: roofData?.roofArea,
-          pitch: roofData?.pitch,
-          heatingSystem: answers?.heatingSystem,
-          currentInsulation: answers?.currentInsulation,
-          atticAccess: answers?.atticAccess,
-          identifiedProblems: answers?.identifiedProblems,
-        }))
-        const pricingUrl = `/pricing?leadId=${leadId}&d=${urlData}`
-        if (OTP_ENABLED) {
-          // Update redirectTo to point to pricing page (phone already set by wizard)
-          const otpData = JSON.parse(sessionStorage.getItem('otp-verify') || '{}')
-          sessionStorage.setItem('otp-verify', JSON.stringify({ ...otpData, redirectTo: pricingUrl }))
-          router.push('/verifier-telephone')
-        } else {
-          router.push(pricingUrl)
-        }
-      } catch (error) {
-        console.error('Error storing pricing data:', error)
-        setCurrentStep("pricing")
-      }
-    } else {
-      // Fallback if no leadId
-      setCurrentStep("pricing")
-    }
+    setCurrentStep("lead-capture")
   }
 
-  const handleLeadCaptureComplete = (pricing: any) => {
+  const handleLeadCaptureComplete = (pricing: any, captured: LeadData, _leadId: string) => {
     setPricingData(pricing)
+    setLeadData(captured)
     setCurrentStep("pricing")
   }
 
@@ -314,8 +284,12 @@ export default function AnalysisPage() {
           <UserQuestionnaire roofData={roofData} onComplete={handleQuestionnaireComplete} />
         )}
 
-        {currentStep === "lead-capture" && roofData && userAnswers && leadData && (
-          <LeadCaptureForm roofData={roofData} userAnswers={userAnswers} leadData={leadData} onComplete={handleLeadCaptureComplete} />
+        {currentStep === "lead-capture" && roofData && userAnswers && (
+          <LeadCaptureForm
+            roofData={roofData}
+            v2Answers={userAnswers}
+            onComplete={handleLeadCaptureComplete}
+          />
         )}
 
         {currentStep === "pricing" && roofData && userAnswers && leadData && (
@@ -323,14 +297,7 @@ export default function AnalysisPage() {
             roofData={roofData}
             userAnswers={userAnswers}
             leadData={leadData}
-            onComplete={() => {
-              // Redirect to OTP verification before success page
-              if (OTP_ENABLED) {
-                router.push("/verifier-telephone")
-              } else {
-                router.push("/success")
-              }
-            }}
+            onComplete={() => router.push("/success")}
           />
         )}
       </main>
