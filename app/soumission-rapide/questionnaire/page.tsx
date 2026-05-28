@@ -46,11 +46,10 @@ interface StepConfig {
 const STEP_CONFIG: readonly StepConfig[] = [
   {
     key: "address",
-    title: "Où se trouve ta propriété?",
-    subtitle: "On a besoin de ton adresse pour matcher avec des entrepreneurs dans ta région.",
+    title: "Où se trouve votre propriété ?",
+    subtitle:
+      "Pour trouver des entrepreneurs près de chez vous et estimer vos économies potentielles.",
     type: "address",
-    helperText:
-      "🔒 Ton adresse reste confidentielle — on la partage uniquement avec les entrepreneurs si tu décides d'avoir des soumissions.",
   },
   {
     key: "symptoms",
@@ -547,69 +546,62 @@ function QuestionnaireContent() {
               </p>
             </div>
 
-            {/* ── Step type: address ── */}
+            {/* ── Step type: address (kept identical to original V1 funnel) ── */}
             {currentStepCfg.type === "address" && (
-              <div className="flex flex-col gap-[16px] w-full">
-                <div className="relative w-full">
-                  <div className="flex items-center w-full bg-[#f6f8fb] border border-[#dbe0ec] rounded-full px-[16px] py-[16px] gap-[10px]">
-                    {isLoadingAddressPredictions ? (
-                      <Loader2 className="w-[20px] h-[20px] shrink-0 text-[#6c6c6c] animate-spin" />
-                    ) : (
-                      <img src="/images/icon-search.svg" alt="" className="w-[20px] h-[20px] shrink-0" />
-                    )}
-                    <input
-                      ref={addressInputRef}
-                      type="text"
-                      value={addressInput}
-                      onChange={(e) => handleAddressInputChange(e.target.value)}
-                      onKeyDown={handleAddressKeyDown}
-                      placeholder="Ex : 123 rue Principale, Alma, QC"
-                      className="flex-1 bg-transparent outline-none text-[#002042] text-[16px] tracking-[-0.64px] leading-none placeholder:text-[#6c6c6c]"
-                      style={{ fontFamily: "'Geist Mono', monospace", fontWeight: 500 }}
-                    />
-                    {validAddress && (
-                      <CheckCircle className="w-[20px] h-[20px] shrink-0 text-[#b9e15c]" />
-                    )}
-                  </div>
-                  {isAddressDropdownOpen && addressPredictions.length > 0 && (
-                    <div
-                      ref={addressDropdownRef}
-                      className="absolute z-40 w-full mt-2 bg-white border border-[#dbe0ec] rounded-[16px] shadow-lg overflow-hidden"
-                    >
-                      {addressPredictions.map((prediction, index) => (
-                        <button
-                          key={prediction.place_id}
-                          onClick={() => handleAddressPredictionSelect(prediction)}
-                          className={`w-full px-[16px] py-[12px] text-left flex items-start gap-3 border-b border-[#eef5fc] last:border-b-0 transition-colors ${
-                            index === addressSelectedIndex ? "bg-[#eef5fc]" : "hover:bg-[#f6f8fb]"
-                          }`}
-                        >
-                          <MapPin className="w-[16px] h-[16px] mt-[2px] shrink-0 text-[#aedee5]" />
-                          <div className="flex-1 min-w-0">
-                            <p
-                              className="font-medium text-[#002042] text-[14px] truncate"
-                              style={{ fontFamily: "'Source Serif Pro', serif" }}
-                            >
-                              {prediction.main_text}
-                            </p>
-                            {prediction.secondary_text && (
-                              <p
-                                className="text-[12px] text-[#375371] truncate"
-                                style={{ fontFamily: "'Source Serif Pro', serif" }}
-                              >
-                                {prediction.secondary_text}
-                              </p>
-                            )}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
+              <div className="relative w-full">
+                <div className="flex items-center w-full bg-[#f6f8fb] border border-[#dbe0ec] rounded-full px-[16px] py-[16px] gap-[10px]">
+                  {isLoadingAddressPredictions ? (
+                    <Loader2 className="w-[20px] h-[20px] shrink-0 text-[#6c6c6c] animate-spin" />
+                  ) : (
+                    <img src="/images/icon-search.svg" alt="" className="w-[20px] h-[20px] shrink-0" />
+                  )}
+                  <input
+                    ref={addressInputRef}
+                    type="text"
+                    value={addressInput}
+                    onChange={(e) => handleAddressInputChange(e.target.value)}
+                    onKeyDown={handleAddressKeyDown}
+                    placeholder="Entrez votre adresse"
+                    className="flex-1 bg-transparent outline-none text-[#002042] text-[16px] tracking-[-0.64px] leading-none placeholder:text-[#6c6c6c]"
+                    style={{ fontFamily: "'Geist Mono', monospace", fontWeight: 500 }}
+                  />
+                  {validAddress && (
+                    <CheckCircle className="w-[20px] h-[20px] shrink-0 text-[#b9e15c]" />
                   )}
                 </div>
-                {currentStepCfg.helperText && (
-                  <p className="text-[14px] text-[#375371] leading-[1.4] tracking-[-0.42px]">
-                    {currentStepCfg.helperText}
-                  </p>
+                {isAddressDropdownOpen && addressPredictions.length > 0 && (
+                  <div
+                    ref={addressDropdownRef}
+                    className="absolute z-40 w-full mt-2 bg-white border border-[#dbe0ec] rounded-[16px] shadow-lg overflow-hidden"
+                  >
+                    {addressPredictions.map((prediction, index) => (
+                      <button
+                        key={prediction.place_id}
+                        onClick={() => handleAddressPredictionSelect(prediction)}
+                        className={`w-full px-[16px] py-[12px] text-left flex items-start gap-3 border-b border-[#eef5fc] last:border-b-0 transition-colors ${
+                          index === addressSelectedIndex ? "bg-[#eef5fc]" : "hover:bg-[#f6f8fb]"
+                        }`}
+                      >
+                        <MapPin className="w-[16px] h-[16px] mt-[2px] shrink-0 text-[#aedee5]" />
+                        <div className="flex-1 min-w-0">
+                          <p
+                            className="font-medium text-[#002042] text-[14px] truncate"
+                            style={{ fontFamily: "'Source Serif Pro', serif" }}
+                          >
+                            {prediction.main_text}
+                          </p>
+                          {prediction.secondary_text && (
+                            <p
+                              className="text-[12px] text-[#375371] truncate"
+                              style={{ fontFamily: "'Source Serif Pro', serif" }}
+                            >
+                              {prediction.secondary_text}
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
             )}
@@ -764,7 +756,7 @@ function QuestionnaireContent() {
                   className="bg-[#b9e15c] border-2 border-[#002042] text-[#002042] font-bold text-[18px] h-[56px] px-[32px] rounded-full shadow-[-2px_4px_0px_0px_#002042] hover:shadow-[-1px_2px_0px_0px_#002042] hover:translate-y-[1px] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none disabled:translate-y-0"
                   style={{ fontFamily: "'Source Serif Pro', serif" }}
                 >
-                  Continuer
+                  Suivant
                 </button>
               )}
               {currentStepCfg.type === "multiselect" && (
