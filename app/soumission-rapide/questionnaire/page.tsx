@@ -146,12 +146,19 @@ function QuestionnaireContent() {
   const router = useRouter()
   const villeSlug = searchParams.get("ville") || ""
   const timeline = searchParams.get("timeline") || "exploring"
+  // Honor `?intent=qualified` (or curious) deeplinks — used by the /merci "Tu
+  // changes d'idée?" CTA for curious-path visitors who decide to get quotes
+  // after seeing their estimation.
+  const initialIntent: IntentCode | undefined = (() => {
+    const raw = searchParams.get("intent")
+    return raw === "qualified" || raw === "curious" ? raw : undefined
+  })()
 
   const municipality = getMunicipalityBySlug(villeSlug)
   const cityName = municipality?.name || villeSlug
 
   const [currentStep, setCurrentStep] = useState(0)
-  const [selections, setSelections] = useState<Selections>({ symptoms: [] })
+  const [selections, setSelections] = useState<Selections>({ symptoms: [], intent: initialIntent })
   const [addressInput, setAddressInput] = useState("")
   const [validAddress, setValidAddress] = useState("")
   const [addressCity, setAddressCity] = useState("")
@@ -604,7 +611,7 @@ function QuestionnaireContent() {
             {/* ── Step type: multiselect (symptoms) ── */}
             {currentStepCfg.type === "multiselect" && (
               <div className="flex flex-col gap-[16px] w-full">
-                <div className="flex flex-col gap-[12px] w-full">
+                <div className="flex flex-col gap-[12px] w-full" role="group" aria-label={currentStepCfg.title}>
                   {SYMPTOMS_OPTIONS.map((opt) => {
                     const isSelected = selections.symptoms.includes(opt.code)
                     return (
@@ -612,6 +619,7 @@ function QuestionnaireContent() {
                         key={opt.code}
                         type="button"
                         onClick={() => handleSymptomToggle(opt.code)}
+                        aria-pressed={isSelected}
                         className={`flex flex-row items-center gap-[16px] w-full p-[16px] rounded-[20px] transition-all text-left ${
                           isSelected
                             ? "border-2 border-[#b9e15c] bg-[#f4fce4]"
@@ -643,13 +651,15 @@ function QuestionnaireContent() {
             {/* ── Step type: colorradio (hydro brackets) ── */}
             {currentStepCfg.type === "colorradio" && (
               <div className="flex flex-col gap-[16px] w-full">
-                <div className="flex flex-col gap-[12px] w-full">
+                <div className="flex flex-col gap-[12px] w-full" role="radiogroup" aria-label={currentStepCfg.title}>
                   {HYDRO_BRACKETS.map((opt) => {
                     const isSelected = selections.hydroBracket === opt.code
                     return (
                       <button
                         key={opt.code}
                         type="button"
+                        role="radio"
+                        aria-checked={isSelected}
                         onClick={() => handleHydroSelect(opt.code)}
                         className={`flex flex-row items-center gap-[16px] w-full p-[16px] rounded-[20px] border-2 transition-all text-left ${opt.colorClass} ${
                           isSelected ? "border-[#002042] scale-[0.99]" : ""
@@ -680,13 +690,15 @@ function QuestionnaireContent() {
             {/* ── Step type: intent ── */}
             {currentStepCfg.type === "intent" && (
               <div className="flex flex-col gap-[16px] w-full">
-                <div className="flex flex-col gap-[12px] w-full">
+                <div className="flex flex-col gap-[12px] w-full" role="radiogroup" aria-label={currentStepCfg.title}>
                   {INTENT_OPTIONS.map((opt) => {
                     const isSelected = selections.intent === opt.code
                     return (
                       <button
                         key={opt.code}
                         type="button"
+                        role="radio"
+                        aria-checked={isSelected}
                         onClick={() => handleIntentSelect(opt.code)}
                         className={`flex flex-row items-start gap-[16px] w-full p-[20px] rounded-[20px] border-2 transition-all text-left ${
                           isSelected

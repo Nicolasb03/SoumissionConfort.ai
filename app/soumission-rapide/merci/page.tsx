@@ -193,13 +193,14 @@ export default function MerciPage() {
           </div>
         </div>
 
-        {/* ── Estimate card (Funnel V2 — both intent paths get an estimate) ── */}
-        {estimateInputs && (
-          <EstimateCard
-            hydroBracket={estimateInputs.hydroBracket}
-            symptomsCount={estimateInputs.symptoms.length}
-          />
-        )}
+        {/* ── Estimate card (Funnel V2 — both intent paths get an estimate)
+           Renders a fallback if estimateInputs is missing (e.g., direct hit on
+           /merci without going through the questionnaire). ── */}
+        <EstimateCard
+          hydroBracket={estimateInputs?.hydroBracket ?? null}
+          symptomsCount={estimateInputs?.symptoms.length ?? 0}
+        />
+
 
         {/* ── Prochaines étapes (gated copy by intent) ── */}
         <div className="flex flex-col gap-[32px] items-center w-full">
