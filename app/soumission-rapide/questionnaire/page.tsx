@@ -4,7 +4,7 @@ import type React from "react"
 import { Suspense, useState, useEffect, useCallback, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, CheckCircle, ChevronDown, Loader2, MapPin } from "lucide-react"
+import { ArrowLeft, CheckCircle, Loader2, MapPin } from "lucide-react"
 import { getCurrentUTMParameters, type UTMParameters } from "@/lib/utm-utils"
 import { getMunicipalityBySlug } from "@/lib/municipalities"
 import { useAddressAutocomplete } from "@/hooks/use-address-autocomplete"
@@ -546,14 +546,14 @@ function QuestionnaireContent() {
               </p>
             </div>
 
-            {/* ── Step type: address (visually matches the landing AddressInput) ── */}
+            {/* ── Step type: address (identical to original V1 funnel) ── */}
             {currentStepCfg.type === "address" && (
               <div className="relative w-full">
                 <div className="flex items-center w-full bg-[#f6f8fb] border border-[#dbe0ec] rounded-full px-[16px] py-[16px] gap-[10px]">
                   {isLoadingAddressPredictions ? (
-                    <Loader2 className="w-[20px] h-[20px] shrink-0 text-gray-400 animate-spin" />
+                    <Loader2 className="w-[20px] h-[20px] shrink-0 text-[#6c6c6c] animate-spin" />
                   ) : (
-                    <MapPin className="w-[20px] h-[20px] shrink-0 text-gray-400" />
+                    <img src="/images/icon-search.svg" alt="" className="w-[20px] h-[20px] shrink-0" />
                   )}
                   <input
                     ref={addressInputRef}
@@ -565,14 +565,8 @@ function QuestionnaireContent() {
                     className="flex-1 bg-transparent outline-none text-[#002042] text-[16px] tracking-[-0.64px] leading-none placeholder:text-[#6c6c6c]"
                     style={{ fontFamily: "'Geist Mono', monospace", fontWeight: 500 }}
                   />
-                  {validAddress ? (
+                  {validAddress && (
                     <CheckCircle className="w-[20px] h-[20px] shrink-0 text-[#b9e15c]" />
-                  ) : (
-                    <ChevronDown
-                      className={`w-[20px] h-[20px] shrink-0 text-gray-400 transition-transform ${
-                        isAddressDropdownOpen ? "rotate-180" : ""
-                      }`}
-                    />
                   )}
                 </div>
                 {isAddressDropdownOpen && addressPredictions.length > 0 && (
