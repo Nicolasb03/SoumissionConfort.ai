@@ -9,14 +9,14 @@ export const metadata: Metadata = {
     title: "Soumission Isolation | 3 Soumissions Gratuites d'Entrepreneurs Certifiés au Québec",
     description:
       "Comparez 3 soumissions d'entrepreneurs en isolation certifiés RBQ au Québec. Service gratuit, entrepreneurs vérifiés et interviewés par notre équipe. Subventions disponibles. Réponse en moins de 48h.",
-    url: "https://soumissionconfort.ai/soumission-rapide",
+    url: "https://soumissionconfort.com/soumission-rapide",
     siteName: "Soumission Confort",
     locale: "fr_CA",
     type: "website",
   },
   robots: { index: true, follow: true },
   alternates: {
-    canonical: "https://soumissionconfort.ai/soumission-rapide",
+    canonical: "https://soumissionconfort.com/soumission-rapide",
   },
 }
 
@@ -27,7 +27,7 @@ export default function SoumissionRapidePage() {
     name: "Soumission Confort",
     description:
       "Service de soumission d'isolation gratuit au Québec. Entrepreneurs certifiés RBQ, vérifiés et interviewés.",
-    url: "https://soumissionconfort.ai/soumission-rapide",
+    url: "https://soumissionconfort.com/soumission-rapide",
     areaServed: {
       "@type": "State",
       name: "Québec",
