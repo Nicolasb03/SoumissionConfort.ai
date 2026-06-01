@@ -29,6 +29,19 @@ NEXT_PUBLIC_META_PIXEL_ID=votre_pixel_id
 META_CONVERSION_API_TOKEN=votre_token_conversion_api
 META_PIXEL_ID=votre_pixel_id
 
+# ----------------------------------------------------------------------------
+# Pixel dédié soumissionconfort — funnel /analysis V2 (Phase 2)
+# ----------------------------------------------------------------------------
+# Utilisé UNIQUEMENT par le funnel /analysis (+ /verifier-telephone). Les autres
+# funnels (/thermopompes, /subventions, /soumission-rapide) restent sur
+# NEXT_PUBLIC_META_PIXEL_ID. Pixel créé dans le Business Manager soumissionconfort,
+# séparé du pixel Niku → audience isolation 100% clean.
+# Placeholder XXXXXX = skip strict (aucun pixel browser, aucun CAPI) tant que le
+# pixel n'existe pas, sans polluer le pixel actuel.
+NEXT_PUBLIC_META_PIXEL_ID_SOUMISSIONCONFORT=votre_pixel_id_soumissionconfort
+META_CONVERSION_ACCESS_TOKEN_SOUMISSIONCONFORT=votre_token_capi_soumissionconfort
+META_TEST_EVENT_CODE_SOUMISSIONCONFORT=  # optionnel — Events Manager → Test Events
+
 
 # ============================================================================
 # CRM / WEBHOOKS

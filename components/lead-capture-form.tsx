@@ -11,6 +11,7 @@ import { isValidQuebecPhone } from "@/lib/phone"
 import { getCurrentUTMParameters, type UTMParameters } from "@/lib/utm-utils"
 import { buildV1AnswersFromV2, type V2Answers } from "@/lib/funnel-config"
 import { calculateInsulationPricing } from "@/lib/insulation-calculator"
+import { META_PIXEL_DEDIE } from "@/components/meta-pixel-router"
 
 declare global {
   interface Window {
@@ -106,6 +107,12 @@ export function LeadCaptureForm({ roofData, v2Answers, onComplete }: LeadCapture
       intent: v2Answers.intent,
     }
 
+    // Estimated lead value (standard range midpoint) — carried in pending.meta
+    // so /verifier-telephone can fire the post-OTP Lead pixel with the same value.
+    const estimatedValue = pricingData?.ranges?.standard
+      ? (pricingData.ranges.standard.totalCost.min + pricingData.ranges.standard.totalCost.max) / 2
+      : 0
+
     const leadPayload = {
       firstName: formData.firstName,
       lastName: formData.lastName,
@@ -116,25 +123,21 @@ export function LeadCaptureForm({ roofData, v2Answers, onComplete }: LeadCapture
       userAnswers: userAnswersPayload,
       pricingData,
       utmParams,
+      // eventId stays top-level: /api/leads reads leadData.eventId for the CAPI
+      // Lead, and /verifier-telephone reads pending.eventId for the browser
+      // Lead → same id → Meta dedups browser↔CAPI (P0-3).
       eventId,
+      // Phase 2: drives the post-OTP browser Lead gate + value on /verifier-telephone.
+      meta: {
+        intent: v2Answers.intent,
+        estimatedValue,
+      },
     }
 
-    // Fire Meta browser Lead pixel ONLY for qualified intent — curious leads
-    // pollute the optim audience. Server CAPI is similarly gated Phase 2 in /api/leads.
-    if (
-      v2Answers.intent === 'qualified' &&
-      typeof window !== 'undefined' &&
-      typeof window.fbq === 'function' &&
-      pricingData?.ranges?.standard
-    ) {
-      const range = pricingData.ranges.standard
-      const estimatedValue = (range.totalCost.min + range.totalCost.max) / 2
-      window.fbq('track', 'Lead', {
-        value: estimatedValue.toFixed(2),
-        currency: 'CAD',
-        service_type: 'isolation',
-      }, { eventID: eventId })
-    }
+    // NOTE (Phase 2): the Meta browser Lead pixel is NO LONGER fired here.
+    // It moved past the OTP gate — qualified + form submitted + OTP confirmed —
+    // so we never declare a Lead for an unverified phone. Fired from
+    // /verifier-telephone (OTP path) or after /api/leads 200 (non-OTP path below).
 
     const leadDataForReturn: LeadData = {
       firstName: formData.firstName,
@@ -159,7 +162,11 @@ export function LeadCaptureForm({ roofData, v2Answers, onComplete }: LeadCapture
         }))
         const pricingUrl = `/pricing?leadId=${clientLeadId}&d=${urlData}`
         sessionStorage.setItem('pending-lead', JSON.stringify(leadPayload))
-        sessionStorage.setItem('otp-verify', JSON.stringify({ phone: formData.phone, redirectTo: pricingUrl }))
+        // source:'analysis' lets MetaPixelRouter load the DEDICATED pixel on the
+        // shared /verifier-telephone page for THIS funnel only. Thermopompes /
+        // subventions leads also land on /verifier-telephone but never set this
+        // flag → they stay on the shared pixel → zero cross-funnel contamination.
+        sessionStorage.setItem('otp-verify', JSON.stringify({ phone: formData.phone, redirectTo: pricingUrl, source: 'analysis' }))
         router.push('/verifier-telephone')
         return
       }
@@ -174,6 +181,25 @@ export function LeadCaptureForm({ roofData, v2Answers, onComplete }: LeadCapture
         console.error('❌ /api/leads error', response.status, errorText)
         throw new Error(`API call failed: ${response.status}`)
       }
+
+      // Non-OTP path (OTP_ENABLED=false): fire the browser Lead AFTER /api/leads
+      // succeeds — qualified intent only, same eventId as the CAPI Lead, targeted
+      // at the dedicated pixel (trackSingle). When OTP is on, this fires from
+      // /verifier-telephone instead (we return before reaching here).
+      if (
+        v2Answers.intent === 'qualified' &&
+        typeof window !== 'undefined' &&
+        typeof window.fbq === 'function' &&
+        META_PIXEL_DEDIE &&
+        !/^X+$/i.test(META_PIXEL_DEDIE)
+      ) {
+        window.fbq('trackSingle', META_PIXEL_DEDIE, 'Lead', {
+          value: estimatedValue.toFixed(2),
+          currency: 'CAD',
+          service_type: 'isolation',
+        }, { eventID: eventId })
+      }
+
       onComplete(pricingData, leadDataForReturn, clientLeadId)
     } catch (error) {
       console.error('❌ Lead submission error:', error)

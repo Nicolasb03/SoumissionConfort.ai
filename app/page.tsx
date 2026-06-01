@@ -74,7 +74,7 @@ export default function HomePage() {
   useEffect(() => {
     initializeMeta()
     if (isMetaConfigured()) {
-      trackViewContent('Homepage', 'website').catch(() => {})
+      trackViewContent({ contentName: 'Homepage', contentType: 'website' }).catch(() => {})
     }
   }, [])
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import { META_PIXEL_PARTAGE } from "@/components/meta-pixel-router"
 import { AddressInput } from "@/components/address-input"
 import { HowItWorks } from "@/components/how-it-works"
 import { ReviewsSection } from "@/components/reviews-section"
@@ -224,10 +225,19 @@ export default function SubventionsPage() {
     const eventId = crypto.randomUUID()
 
     try {
-      // Fire Meta Pixel (client-side) with shared eventId for dedup
-      if (typeof window !== "undefined" && (window as any).fbq) {
+      // Fire Meta Pixel (client-side) with shared eventId for dedup.
+      // trackSingle targets the SHARED pixel only — a plain track() would also
+      // hit the dedicated soumissionconfort pixel if the user crossed /analysis
+      // earlier this session, polluting the isolation audience.
+      if (
+        typeof window !== "undefined" &&
+        typeof (window as any).fbq === "function" &&
+        META_PIXEL_PARTAGE &&
+        !/^X+$/i.test(META_PIXEL_PARTAGE)
+      ) {
         ;(window as any).fbq(
-          "track",
+          "trackSingle",
+          META_PIXEL_PARTAGE,
           "Lead",
           { service_type: "subvention" },
           { eventID: eventId }

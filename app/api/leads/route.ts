@@ -206,6 +206,14 @@ export async function POST(request: NextRequest) {
               isolation_actuelle: leadData.userAnswers?.currentInsulation,
               acces_entretoit: leadData.userAnswers?.atticAccess,
               systeme_de_chauffage: leadData.userAnswers?.heatingSystem,
+              // V2 funnel fields — wired Phase 2 (IDs in GHL_FIELDS_ISO 41-43).
+              // V1 defaults above are kept for backward-compat with existing
+              // GHL workflows; these add the real V2 answers alongside.
+              symptoms: Array.isArray(leadData.userAnswers?.symptoms)
+                ? leadData.userAnswers.symptoms.join(',')
+                : leadData.userAnswers?.symptoms,
+              hydro_bracket: leadData.userAnswers?.hydroBracket,
+              intent: leadData.userAnswers?.intent,
               problemes_identifies: Array.isArray(leadData.userAnswers?.identifiedProblems)
                 ? leadData.userAnswers.identifiedProblems.join(', ')
                 : leadData.userAnswers?.identifiedProblems,
@@ -246,6 +254,19 @@ export async function POST(request: NextRequest) {
           },
         }
 
+        // Phase 2 V2: dynamic qualification tag for the /analysis funnel.
+        //  - qualified → 'Lead Iso Hot' + drop 'Lead Iso Curieux' (override).
+        //  - curious   → 'Lead Iso Curieux' (no removal: once hot, stays hot —
+        //    qualified→curious does NOT strip 'Lead Iso Hot', Zack v2 décision 8).
+        if (vertical === 'isolation' && leadData.userAnswers?.intent) {
+          if (leadData.userAnswers.intent === 'qualified') {
+            ghlPayload.tagOverride = 'Lead Iso Hot'
+            ghlPayload.tagsToRemove = ['Lead Iso Curieux']
+          } else if (leadData.userAnswers.intent === 'curious') {
+            ghlPayload.tagOverride = 'Lead Iso Curieux'
+          }
+        }
+
         const ghlResult = await postLeadToGHL(ghlPayload)
         console.log('🟢 LEADS API: GHL post result:', ghlResult)
 
@@ -266,11 +287,37 @@ export async function POST(request: NextRequest) {
         // the GHL cutover. The legacy block at the bottom of this file is
         // skipped by the early return below; without this duplicate, GHL
         // contacts wouldn't get a Meta Lead event.
+        //
+        // Phase 2 V2: for vertical='isolation' (the /analysis funnel) the Lead
+        // routes to the DEDICATED soumissionconfort pixel and is gated by
+        // intent === 'qualified'. Every other vertical stays on the shared
+        // pixel, ungated, exactly as before.
         try {
-          const metaPixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID
-          const metaAccessToken = process.env.META_CONVERSION_ACCESS_TOKEN
-          if (metaPixelId && metaAccessToken) {
-            const metaAPI = initializeMetaConversionAPI(metaPixelId, metaAccessToken)
+          const useSoumissionConfortPixel = vertical === 'isolation'
+          const metaPixelId = useSoumissionConfortPixel
+            ? process.env.NEXT_PUBLIC_META_PIXEL_ID_SOUMISSIONCONFORT
+            : process.env.NEXT_PUBLIC_META_PIXEL_ID
+          const metaAccessToken = useSoumissionConfortPixel
+            ? process.env.META_CONVERSION_ACCESS_TOKEN_SOUMISSIONCONFORT
+            : process.env.META_CONVERSION_ACCESS_TOKEN
+          const metaTestEventCode = useSoumissionConfortPixel
+            ? process.env.META_TEST_EVENT_CODE_SOUMISSIONCONFORT
+            : process.env.META_TEST_EVENT_CODE
+
+          const isPlaceholder = (v?: string) => !!v && /^X+$/i.test(v)
+          // Only the isolation funnel is intent-gated; other verticals always fire.
+          const intentGateOk = !useSoumissionConfortPixel
+            || leadData.userAnswers?.intent === 'qualified'
+          // isTest gate (Zack v2 décision 7): replay/debug payloads never reach Meta.
+          const isTestLead = leadData.isTest === true
+
+          if (
+            !isTestLead
+            && metaPixelId && metaAccessToken
+            && !isPlaceholder(metaPixelId) && !isPlaceholder(metaAccessToken)
+            && intentGateOk
+          ) {
+            const metaAPI = initializeMetaConversionAPI(metaPixelId, metaAccessToken, metaTestEventCode)
             const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0] ||
                              request.headers.get('x-real-ip') || 'unknown'
             const userAgent = request.headers.get('user-agent') || 'unknown'
@@ -311,7 +358,13 @@ export async function POST(request: NextRequest) {
               eventId: leadData.eventId || undefined,
               customData: { service_type: serviceType },
             })
-            console.log(`✅ LEADS API: Meta CAPI event sent (GHL branch, ${serviceType})`)
+            console.log(`✅ LEADS API: Meta CAPI Lead sent (GHL branch, ${serviceType}, pixel=${useSoumissionConfortPixel ? 'soumissionconfort' : 'shared'})`)
+          } else if (isTestLead) {
+            console.log('[leads] skip Meta CAPI Lead — isTest=true')
+          } else if (useSoumissionConfortPixel && !intentGateOk) {
+            console.log('[leads] skip Meta CAPI Lead — intent !== qualified')
+          } else if (useSoumissionConfortPixel && (isPlaceholder(metaPixelId) || isPlaceholder(metaAccessToken))) {
+            console.warn('[leads] skip Meta CAPI Lead — soumissionconfort pixel/token is placeholder XXXXXX')
           } else {
             console.warn('⚠️ LEADS API: Meta CAPI not configured (GHL branch)')
           }
@@ -744,21 +797,43 @@ export async function POST(request: NextRequest) {
         console.error('❌ LEADS API: All webhooks failed')
       }
       
-      // Server-side Meta Conversion API tracking for ALL lead types
+      // Server-side Meta Conversion API tracking for ALL lead types.
+      // NOTE: this legacy Make path is NOT executed in prod (GHL_ENABLED=true),
+      // but we mirror the GHL-branch gating for consistency: isolation routes to
+      // the dedicated pixel + intent gate, others stay on the shared pixel,
+      // and isTest leads never reach Meta.
       if (successfulWebhooks > 0) {
         try {
-          const metaPixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID
-          const metaAccessToken = process.env.META_CONVERSION_ACCESS_TOKEN
-          
-          if (metaPixelId && metaAccessToken) {
-            const metaAPI = initializeMetaConversionAPI(metaPixelId, metaAccessToken)
-            
+          const useSoumissionConfortPixel = leadType === 'isolation'
+          const metaPixelId = useSoumissionConfortPixel
+            ? process.env.NEXT_PUBLIC_META_PIXEL_ID_SOUMISSIONCONFORT
+            : process.env.NEXT_PUBLIC_META_PIXEL_ID
+          const metaAccessToken = useSoumissionConfortPixel
+            ? process.env.META_CONVERSION_ACCESS_TOKEN_SOUMISSIONCONFORT
+            : process.env.META_CONVERSION_ACCESS_TOKEN
+          const metaTestEventCode = useSoumissionConfortPixel
+            ? process.env.META_TEST_EVENT_CODE_SOUMISSIONCONFORT
+            : process.env.META_TEST_EVENT_CODE
+
+          const isPlaceholder = (v?: string) => !!v && /^X+$/i.test(v)
+          const intentGateOk = !useSoumissionConfortPixel
+            || leadData.userAnswers?.intent === 'qualified'
+          const isTestLead = leadData.isTest === true
+
+          if (
+            !isTestLead
+            && metaPixelId && metaAccessToken
+            && !isPlaceholder(metaPixelId) && !isPlaceholder(metaAccessToken)
+            && intentGateOk
+          ) {
+            const metaAPI = initializeMetaConversionAPI(metaPixelId, metaAccessToken, metaTestEventCode)
+
             // Get client IP and user agent from request headers
-            const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0] || 
-                            request.headers.get('x-real-ip') || 
+            const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0] ||
+                            request.headers.get('x-real-ip') ||
                             'unknown'
             const userAgent = request.headers.get('user-agent') || 'unknown'
-            
+
             // Determine service_type and value based on lead type
             const serviceTypeMap: Record<string, string> = {
               'isolation': 'isolation',
@@ -767,11 +842,11 @@ export async function POST(request: NextRequest) {
               'hvac': 'thermopompe',
             }
             const serviceType = serviceTypeMap[leadType] || 'isolation'
-            
+
             // Calculate estimated value for tracking
             let estimatedValue = 0
             if (isHVAC) {
-              estimatedValue = leadData.estimatedPrice || 
+              estimatedValue = leadData.estimatedPrice ||
                               ((leadData.estimatedPriceMin || 0) + (leadData.estimatedPriceMax || 0)) / 2
             } else if (isSubvention) {
               estimatedValue = 1500 // Subvention value
@@ -781,7 +856,7 @@ export async function POST(request: NextRequest) {
               const stdMax = leadData.pricingData?.ranges?.standard?.totalCost?.max || 0
               estimatedValue = (stdMin + stdMax) / 2
             }
-            
+
             // Determine source URL based on lead type
             const sourceUrlMap: Record<string, string> = {
               'isolation': '/analysis',
@@ -790,9 +865,9 @@ export async function POST(request: NextRequest) {
             }
             const sourcePath = sourceUrlMap[leadType] || '/'
             const origin = request.headers.get('origin') || 'https://soumissionconfort.ai'
-            
-            console.log(`📊 LEADS API: Sending server-side Meta Lead event for ${serviceType} (eventId: ${leadData.eventId || 'none'})`)
-            
+
+            console.log(`📊 LEADS API: Sending server-side Meta Lead event for ${serviceType} (eventId: ${leadData.eventId || 'none'}, pixel=${useSoumissionConfortPixel ? 'soumissionconfort' : 'shared'})`)
+
             await metaAPI.trackLead({
               email: leadData.email,
               phone: leadData.phone,
@@ -807,8 +882,14 @@ export async function POST(request: NextRequest) {
                 service_type: serviceType
               }
             })
-            
+
             console.log(`✅ LEADS API: Server-side Meta Lead event sent successfully for ${serviceType}`)
+          } else if (isTestLead) {
+            console.log('[leads] skip Meta CAPI Lead — isTest=true (legacy path)')
+          } else if (useSoumissionConfortPixel && !intentGateOk) {
+            console.log('[leads] skip Meta CAPI Lead — intent !== qualified (legacy path)')
+          } else if (useSoumissionConfortPixel && (isPlaceholder(metaPixelId) || isPlaceholder(metaAccessToken))) {
+            console.warn('[leads] skip Meta CAPI Lead — soumissionconfort pixel/token is placeholder XXXXXX (legacy path)')
           } else {
             console.warn('⚠️ LEADS API: Meta Pixel credentials not configured for server-side tracking')
           }

@@ -51,6 +51,12 @@ export interface NormalizedLead {
   internalLeadId?: string
   // Optional notes appended on creation
   noteBody?: string
+  // Phase 2 V2: replaces VERTICAL_TAG[vertical] on the contact when set
+  // (e.g. 'Lead Iso Hot' / 'Lead Iso Curieux' for the /analysis funnel).
+  tagOverride?: string
+  // Phase 2 V2: tags to remove after upsert (best-effort). Used for the
+  // curious→qualified override (drop 'Lead Iso Curieux' once hot).
+  tagsToRemove?: string[]
 }
 
 interface GHLContactPayload {
@@ -151,7 +157,13 @@ function buildContactPayload(
     postalCode: lead.postalCode,
     country: 'CA',
     source: lead.leadSource ?? lead.utmSource ?? 'vercel-direct',
-    tags: [VERTICAL_TAG[lead.vertical]],
+    // When a tagOverride is set (isolation V2 Hot/Curieux), DON'T put tags in
+    // the upsert: GHL's upsert REPLACES the whole tags array, which would wipe
+    // an existing 'Lead Iso Hot' on a qualified→curious re-submit (violates
+    // décision 8: once Hot, stays Hot). Instead postLeadToGHL adds the tag via
+    // POST /tags (idempotent, non-destructive). Other verticals keep the
+    // upsert tag (no Hot/Curieux state transitions → no overwrite risk).
+    ...(lead.tagOverride ? {} : { tags: [VERTICAL_TAG[lead.vertical]] }),
     customFields,
   }
 }
@@ -265,6 +277,44 @@ export async function postLeadToGHL(lead: NormalizedLead): Promise<GHLPostResult
       method: 'POST',
       body: JSON.stringify({ body: lead.noteBody }),
     })
+  }
+
+  // Phase 2 V2: isolation Hot/Curieux tag, added via POST /tags (NOT the upsert).
+  // POST /tags is additive + idempotent: it never wipes other tags, so a
+  // qualified→curious re-submit ADDS 'Lead Iso Curieux' while KEEPING any
+  // existing 'Lead Iso Hot' (décision 8: once Hot, stays Hot). The upsert tag
+  // was suppressed in buildContactPayload when tagOverride is set.
+  if (contactId && lead.tagOverride) {
+    const addRes = await ghlRequest(apiKey, `/contacts/${contactId}/tags`, {
+      method: 'POST',
+      body: JSON.stringify({ tags: [lead.tagOverride] }),
+    })
+    if (!addRes.ok) {
+      console.warn(`[ghl-client] tag add failed for ${contactId}:`, addRes.error)
+    }
+  }
+
+  // Phase 2 V2: remove stale tags after upsert (best-effort). Used for the
+  // curious→qualified override — a 'Lead Iso Curieux' contact re-submitting as
+  // qualified gets 'Lead Iso Hot' added above and 'Lead Iso Curieux' dropped
+  // here, so the contact carries a single source of truth. (One-way only:
+  // qualified→curious sets no tagsToRemove, preserving Hot per décision 8.)
+  //
+  // We never block / fail the lead on a tag-removal error — the contact + its
+  // hot tag are already persisted; a leftover curious tag is cosmetic.
+  //
+  // Endpoint: DELETE /contacts/{contactId}/tags. Body `{ tags: [...] }` is
+  // inferred from the ADD endpoint (the Remove docs don't spell out the body).
+  // Validate with a curl on a test contact in preview before prod; if the
+  // schema differs (e.g. query param), adjust here.
+  if (contactId && lead.tagsToRemove && lead.tagsToRemove.length > 0) {
+    const removeRes = await ghlRequest(apiKey, `/contacts/${contactId}/tags`, {
+      method: 'DELETE',
+      body: JSON.stringify({ tags: lead.tagsToRemove }),
+    })
+    if (!removeRes.ok) {
+      console.warn(`[ghl-client] tag removal failed for ${contactId}:`, removeRes.error)
+    }
   }
 
   return { contactId, duplicate, contactStatus: created.status }
