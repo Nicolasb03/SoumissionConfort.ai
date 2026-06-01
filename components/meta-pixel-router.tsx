@@ -35,12 +35,15 @@ import { usePathname } from 'next/navigation'
 // pixels. We init each pixel once and fire every PageView with
 // `trackSingle(<pixelId>, ...)` to the route's pixel only.
 
-// Exported so the OTHER funnels (thermopompes/subventions/soumission-rapide)
-// can fire their events with trackSingle(<shared>, ...) instead of a global
-// fbq('track', ...), which would fan out to the dedicated pixel too once a
-// user has crossed the /analysis funnel in the same session. Single source of
-// truth — call sites can't accidentally target the wrong pixel.
-export const META_PIXEL_PARTAGE = process.env.NEXT_PUBLIC_META_PIXEL_ID || ''
+// Canal partagé Niku DÉSACTIVÉ (isolation 2026-06) : seul le funnel /analysis
+// (pixel dédié) alimente Meta. On force cette constante à vide — NE PAS relire
+// process.env.NEXT_PUBLIC_META_PIXEL_ID ici. Effet : tous les call-sites des
+// autres funnels (thermopompes/subventions/soumission-rapide) qui gardent un
+// guard `META_PIXEL_PARTAGE && !isPlaceholder(...)` deviennent no-op, SANS
+// dépendre de la valeur de la var d'env Vercel (protection permanente, lisible
+// dans le code). Le routing PageView, le bootstrap et le noscript ci-dessous se
+// neutralisent seuls puisque isPlaceholder('') === true.
+export const META_PIXEL_PARTAGE = ''
 const PIXEL_PARTAGE = META_PIXEL_PARTAGE
 // Exported so the wizard ViewContent + post-OTP Lead can target the dedicated
 // pixel with trackSingle (browser dedup vs CAPI).
@@ -99,6 +102,11 @@ export function MetaPixelRouter() {
 
     // Init this pixel once (idempotent across navigations).
     if (!initedRef.current.has(pixelForRoute)) {
+      // Disable Meta's automatic event detection (button/form clicks etc.) for
+      // this pixel — we only want the events we fire explicitly. Without this,
+      // the pixel emits auto events like `SubscribedButtonClick`. Set BEFORE
+      // init so it applies from the first event.
+      window.fbq('set', 'autoConfig', false, pixelForRoute)
       window.fbq('init', pixelForRoute)
       initedRef.current.add(pixelForRoute)
     }
