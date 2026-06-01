@@ -279,15 +279,21 @@ export async function postLeadToGHL(lead: NormalizedLead): Promise<GHLPostResult
     })
   }
 
-  // Phase 2 V2: isolation Hot/Curieux tag, added via POST /tags (NOT the upsert).
+  // Phase 2 V2: isolation tags added via POST /tags (NOT the upsert).
   // POST /tags is additive + idempotent: it never wipes other tags, so a
   // qualified→curious re-submit ADDS 'Lead Iso Curieux' while KEEPING any
   // existing 'Lead Iso Hot' (décision 8: once Hot, stays Hot). The upsert tag
   // was suppressed in buildContactPayload when tagOverride is set.
+  //
+  // We add BOTH the base vertical tag ('Lead Iso') AND the Hot/Curieux
+  // override: V1 leads + every other vertical keep 'Lead Iso' via the upsert,
+  // so V2 leads must too — otherwise existing GHL workflows/smartlists filtering
+  // on 'Lead Iso' would silently stop matching V2 leads. POST is idempotent so
+  // re-adding 'Lead Iso' on a duplicate is a no-op.
   if (contactId && lead.tagOverride) {
     const addRes = await ghlRequest(apiKey, `/contacts/${contactId}/tags`, {
       method: 'POST',
-      body: JSON.stringify({ tags: [lead.tagOverride] }),
+      body: JSON.stringify({ tags: [VERTICAL_TAG[lead.vertical], lead.tagOverride] }),
     })
     if (!addRes.ok) {
       console.warn(`[ghl-client] tag add failed for ${contactId}:`, addRes.error)
