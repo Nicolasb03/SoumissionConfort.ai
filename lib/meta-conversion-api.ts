@@ -98,21 +98,38 @@ export class MetaConversionAPI {
     this.testEventCode = testEventCode;
   }
 
-  // Track ViewContent event (when user enters website)
-  async trackViewContent(contentName?: string, contentType?: string) {
+  // Track ViewContent event. Accepts an object so the /analysis wizard can pass
+  // an eventId for browser↔CAPI dedup, plus server-side client info (ip/ua/url)
+  // that getClientInfo() can't supply outside the browser.
+  async trackViewContent(data: {
+    contentName?: string
+    contentType?: string
+    searchString?: string
+    eventId?: string
+    clientIp?: string
+    userAgent?: string
+    sourceUrl?: string
+  } = {}) {
+    // Prefer explicit server-passed client info; fall back to browser cookies
+    // (_fbp/_fbc) + UA when called client-side.
+    const userData: NonNullable<MetaConversionEvent['user_data']> = { ...getClientInfo() };
+    if (data.clientIp) userData.client_ip_address = data.clientIp;
+    if (data.userAgent) userData.client_user_agent = data.userAgent;
+
     const event: MetaConversionEvent = {
       event_name: 'ViewContent',
+      event_id: data.eventId,
       event_time: Math.floor(Date.now() / 1000),
       action_source: 'website',
-      user_data: {
-        ...getClientInfo()
-      },
+      user_data: userData,
       custom_data: {
-        content_type: contentType || 'website',
-        content_name: contentName || 'Homepage',
-        currency: 'CAD'
+        content_type: data.contentType || 'website',
+        content_name: data.contentName || 'Homepage',
+        currency: 'CAD',
+        ...(data.searchString ? { search_string: data.searchString } : {}),
       },
-      event_source_url: typeof window !== 'undefined' ? window.location.href : undefined
+      event_source_url: data.sourceUrl
+        || (typeof window !== 'undefined' ? window.location.href : undefined),
     };
 
     return this.sendEvent(event);
@@ -340,9 +357,17 @@ export function getMetaConversionAPI(): MetaConversionAPI | null {
 }
 
 // Convenience functions for tracking events
-export async function trackViewContent(contentName?: string, contentType?: string) {
+export async function trackViewContent(data: {
+  contentName?: string
+  contentType?: string
+  searchString?: string
+  eventId?: string
+  clientIp?: string
+  userAgent?: string
+  sourceUrl?: string
+} = {}) {
   if (metaAPI) {
-    return await metaAPI.trackViewContent(contentName, contentType);
+    return await metaAPI.trackViewContent(data);
   }
   console.warn('Meta Conversion API not initialized');
   return { success: false, error: 'API not initialized' };

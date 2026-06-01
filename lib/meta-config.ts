@@ -28,3 +28,26 @@ export function initializeMeta() {
 export function isMetaConfigured(): boolean {
   return !!(META_CONFIG.PIXEL_ID && META_CONFIG.ACCESS_TOKEN);
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// Dedicated soumissionconfort pixel — funnel /analysis only (Phase 2 V2).
+// Separate Meta Business Manager pixel, cohabits with META_CONFIG (the Niku
+// shared pixel that keeps serving homepage/thermopompes/subventions/rapide).
+// ───────────────────────────────────────────────────────────────────────────
+export const META_CONFIG_SOUMISSIONCONFORT = {
+  PIXEL_ID: process.env.NEXT_PUBLIC_META_PIXEL_ID_SOUMISSIONCONFORT || '',
+  ACCESS_TOKEN: process.env.META_CONVERSION_ACCESS_TOKEN_SOUMISSIONCONFORT || '',
+  TEST_EVENT_CODE: process.env.META_TEST_EVENT_CODE_SOUMISSIONCONFORT || undefined,
+};
+
+// True only when both id + token are real (not empty, not the XXXXXX
+// placeholder). Lets the CAPI routes skip silently during the rollout window
+// before the pixel exists, instead of POSTing garbage to Meta.
+export function isSoumissionConfortMetaConfigured(): boolean {
+  const id = META_CONFIG_SOUMISSIONCONFORT.PIXEL_ID;
+  const token = META_CONFIG_SOUMISSIONCONFORT.ACCESS_TOKEN;
+  if (!id || !token) return false;
+  // Guard against the XXXXXX placeholder Zack writes before the pixel exists.
+  if (/^X+$/i.test(id) || /^X+$/i.test(token)) return false;
+  return true;
+}

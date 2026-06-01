@@ -5,6 +5,13 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { CheckCircle, Loader2 } from "lucide-react"
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
+import { META_PIXEL_DEDIE } from "@/components/meta-pixel-router"
+
+declare global {
+  interface Window {
+    fbq: (...args: any[]) => void
+  }
+}
 
 type State = "sending" | "pending" | "confirming" | "submitting" | "verified" | "error"
 
@@ -178,6 +185,38 @@ export default function VerifierTelephonePage() {
           setState("error")
         }
         return
+      }
+
+      // OTP confirmed + lead persisted → NOW fire the Meta browser Lead.
+      // /verifier-telephone is shared across funnels, but only the analysis
+      // lead form stashes `meta.intent`, so this gate fires for isolation leads
+      // ONLY (thermopompes/subventions payloads have no meta.intent). For those
+      // analysis leads, MetaPixelRouter has loaded the dedicated pixel
+      // (otp-verify.source==='analysis'); we still target it explicitly with
+      // trackSingle. Same eventId as the CAPI Lead (/api/leads) → Meta dedups.
+      try {
+        const pendingRaw = sessionStorage.getItem("pending-lead")
+        if (pendingRaw) {
+          const pending = JSON.parse(pendingRaw)
+          if (
+            pending?.meta?.intent === "qualified" &&
+            typeof window !== "undefined" &&
+            typeof window.fbq === "function" &&
+            META_PIXEL_DEDIE &&
+            !/^X+$/i.test(META_PIXEL_DEDIE)
+          ) {
+            const leadEventId =
+              pending.eventId ||
+              ("randomUUID" in crypto ? crypto.randomUUID() : `lead-${Date.now()}`)
+            window.fbq("trackSingle", META_PIXEL_DEDIE, "Lead", {
+              value: Number(pending.meta.estimatedValue || 0).toFixed(2),
+              currency: "CAD",
+              service_type: "isolation",
+            }, { eventID: leadEventId })
+          }
+        }
+      } catch (err) {
+        console.warn("post-OTP Lead pixel failed", err)
       }
 
       setState("verified")

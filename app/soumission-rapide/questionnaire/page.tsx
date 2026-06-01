@@ -3,6 +3,7 @@
 import type React from "react"
 import { Suspense, useState, useEffect, useCallback, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
+import { META_PIXEL_PARTAGE } from "@/components/meta-pixel-router"
 import Link from "next/link"
 import { ArrowLeft, CheckCircle, Loader2, MapPin } from "lucide-react"
 import { getCurrentUTMParameters, type UTMParameters } from "@/lib/utm-utils"
@@ -99,8 +100,16 @@ function trackStepEvent(stepNumber: number, stepName: string, stepValue: string)
       step_value: stepValue,
     })
   }
-  if (typeof window !== "undefined" && typeof window.fbq === "function") {
-    window.fbq("trackCustom", "QuestionnaireStep", {
+  // trackSingleCustom targets the SHARED pixel only — a plain trackCustom()
+  // would also reach the dedicated soumissionconfort pixel if the user crossed
+  // /analysis earlier this session.
+  if (
+    typeof window !== "undefined" &&
+    typeof window.fbq === "function" &&
+    META_PIXEL_PARTAGE &&
+    !/^X+$/i.test(META_PIXEL_PARTAGE)
+  ) {
+    window.fbq("trackSingleCustom", META_PIXEL_PARTAGE, "QuestionnaireStep", {
       step_number: stepNumber,
       step_name: stepName,
       step_value: stepValue,
@@ -358,9 +367,15 @@ function QuestionnaireContent() {
       }
 
       // Meta Pixel — Lead event (fire client-side regardless of when the
-      // API call happens; final dedup via server-side eventId).
-      if (typeof window.fbq === "function") {
-        window.fbq("track", "Lead", {
+      // API call happens; final dedup via server-side eventId). trackSingle
+      // targets the SHARED pixel only so this soumission-rapide Lead never
+      // reaches the dedicated isolation pixel.
+      if (
+        typeof window.fbq === "function" &&
+        META_PIXEL_PARTAGE &&
+        !/^X+$/i.test(META_PIXEL_PARTAGE)
+      ) {
+        window.fbq("trackSingle", META_PIXEL_PARTAGE, "Lead", {
           currency: "CAD",
           content_name: "isolation-soumission-rapide",
           ...(utmParams.utm_source && { utm_source: utmParams.utm_source }),

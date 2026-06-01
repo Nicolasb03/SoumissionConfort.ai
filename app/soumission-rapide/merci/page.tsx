@@ -68,12 +68,6 @@ export default function MerciPage() {
       if (stored) setLeadData(JSON.parse(stored))
     } catch { /* ignore */ }
 
-    if (typeof window.fbq === "function") {
-      window.fbq("track", "CompleteRegistration", {
-        content_name: "soumission-rapide-isolation",
-        currency: "CAD",
-      })
-    }
     if (typeof window.gtag === "function") {
       window.gtag("event", "conversion", { event_category: "pSEO Questionnaire", event_label: "merci_page_view" })
       window.gtag("event", "merci_page_view", { event_category: "pSEO Questionnaire" })

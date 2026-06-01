@@ -13,6 +13,13 @@ import {
   type HydroBracketCode,
   type IntentCode,
 } from "@/lib/funnel-config"
+import { META_PIXEL_DEDIE } from "@/components/meta-pixel-router"
+
+declare global {
+  interface Window {
+    fbq: (...args: any[]) => void
+  }
+}
 
 interface UserQuestionnaireProps {
   roofData: any
@@ -42,6 +49,49 @@ export function UserQuestionnaire({ roofData: _roofData, onComplete }: UserQuest
     return () => {
       if (advanceTimeoutRef.current) clearTimeout(advanceTimeoutRef.current)
     }
+  }, [])
+
+  // ViewContent fires ONCE when the wizard mounts — this is the moment the user
+  // "starts the application" (after the roof-analysis loading). Browser fbq +
+  // CAPI share the same eventId so Meta dedups to 1 event. Dedicated pixel only
+  // (we're on /analysis → MetaPixelRouter has loaded the dedicated pixel; we
+  // target it explicitly with trackSingleCustom to stay isolated even if the
+  // shared pixel is also initialised from a prior route).
+  const viewContentFiredRef = useRef(false)
+  useEffect(() => {
+    if (viewContentFiredRef.current) return
+    viewContentFiredRef.current = true
+
+    const eventId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `vc-${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+    // Browser pixel ViewContent → dedicated pixel only. ViewContent is a Meta
+    // STANDARD event, so it's trackSingle (not trackSingleCustom).
+    if (
+      typeof window !== 'undefined'
+      && typeof window.fbq === 'function'
+      && META_PIXEL_DEDIE
+      && !/^X+$/i.test(META_PIXEL_DEDIE)
+    ) {
+      window.fbq('trackSingle', META_PIXEL_DEDIE, 'ViewContent', {
+        content_name: 'analysis-wizard-v2',
+        content_category: 'isolation',
+      }, { eventID: eventId })
+    }
+
+    // CAPI ViewContent → dedicated pixel (server-side), dedup via same eventId.
+    // keepalive guards against the event being dropped if the user navigates
+    // away quickly after mount.
+    fetch('/api/meta/view-content', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eventId,
+        sourceUrl: typeof window !== 'undefined' ? window.location.href : undefined,
+      }),
+      keepalive: true,
+    }).catch(err => console.warn('ViewContent CAPI failed', err))
   }, [])
 
   const totalSteps = STEP_KEYS.length
