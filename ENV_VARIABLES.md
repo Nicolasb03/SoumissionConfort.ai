@@ -38,8 +38,11 @@ META_PIXEL_ID=votre_pixel_id
 # séparé du pixel Niku → audience isolation 100% clean.
 # Placeholder XXXXXX = skip strict (aucun pixel browser, aucun CAPI) tant que le
 # pixel n'existe pas, sans polluer le pixel actuel.
-NEXT_PUBLIC_META_PIXEL_ID_SOUMISSIONCONFORT=votre_pixel_id_soumissionconfort
-META_CONVERSION_ACCESS_TOKEN_SOUMISSIONCONFORT=votre_token_capi_soumissionconfort
+# XXXXXX = placeholder reconnu par le garde-fou (skip strict). Remplacer par les
+# vraies valeurs en prod/preview. NE PAS mettre un texte libre type "votre_..."
+# ici : il ne matche pas /^X+$/ et le code tenterait de l'utiliser comme pixel.
+NEXT_PUBLIC_META_PIXEL_ID_SOUMISSIONCONFORT=XXXXXX
+META_CONVERSION_ACCESS_TOKEN_SOUMISSIONCONFORT=XXXXXX
 META_TEST_EVENT_CODE_SOUMISSIONCONFORT=  # optionnel — Events Manager → Test Events
 
 
