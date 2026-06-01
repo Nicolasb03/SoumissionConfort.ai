@@ -3,8 +3,17 @@ import { initializeMeta, isMetaConfigured } from "@/lib/meta-config"
 import { trackPurchase } from "@/lib/meta-conversion-api"
 
 export async function POST(request: NextRequest) {
+  // Test endpoints are dev-only utilities. Block in production so the public
+  // URL can't be used to inject fake Purchase events into the live Meta stream.
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { error: 'Test endpoints are disabled in production' },
+      { status: 403 },
+    )
+  }
+
   console.log('🛒 TEST PURCHASE ENDPOINT CALLED')
-  
+
   try {
     const data = await request.json()
     

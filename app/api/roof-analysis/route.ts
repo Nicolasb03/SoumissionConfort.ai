@@ -1,6 +1,4 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { initializeMeta, isMetaConfigured } from "@/lib/meta-config"
-import { trackFindLocation } from "@/lib/meta-conversion-api"
 
 const GOOGLE_SOLAR_API_KEY = process.env.GOOGLE_SOLAR_API_KEY
 const GOOGLE_SOLAR_BASE_URL = "https://solar.googleapis.com/v1"
@@ -21,19 +19,10 @@ export async function POST(request: NextRequest) {
 
     console.log("Starting roof analysis for address:", address)
 
-    // Initialize Meta Conversion API and track FindLocation event
-    initializeMeta()
-    if (isMetaConfigured()) {
-      trackFindLocation(address)
-        .then(result => {
-          if (result.success) {
-            console.log('FindLocation event tracked successfully for address:', address)
-          }
-        })
-        .catch(error => {
-          console.error('Failed to track FindLocation event:', error)
-        })
-    }
+    // Meta FindLocation/Search retiré (isolation 2026-06) : cette route est
+    // appelée par /thermopompes ET /analysis. Tracker ici envoyait un event
+    // Search au pixel partagé pour les leads thermopompes → fuite. Le funnel
+    // /analysis a déjà son propre ViewContent dédié (api/meta/view-content).
 
     // Step 1: Convert address to coordinates using Google Geocoding API
     const coordinates = await geocodeAddress(address)

@@ -1,6 +1,4 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { initializeMeta, isMetaConfigured } from "@/lib/meta-config"
-import { trackLead } from "@/lib/meta-conversion-api"
 import { isGHLEnabled, postLeadToGHL, type LeadVertical, type NormalizedLead } from "@/lib/ghl-client"
 
 export async function POST(request: NextRequest) {
@@ -90,27 +88,9 @@ export async function POST(request: NextRequest) {
           )
         }
 
-        // Mirror Meta CAPI so attribution survives the GHL branch.
-        initializeMeta()
-        if (isMetaConfigured()) {
-          try {
-            const estimatedValue = leadData.pricing?.totalCost ||
-              (leadData.property.roofArea ? leadData.property.roofArea * 10 : 5000)
-            await trackLead({
-              email: leadData.contact.email,
-              phone: leadData.contact.phone,
-              firstName: leadData.contact.firstName,
-              lastName: leadData.contact.lastName,
-              value: estimatedValue,
-              clientIp: request.headers.get('x-forwarded-for') ||
-                        request.headers.get('x-real-ip') || '127.0.0.1',
-              userAgent: request.headers.get('user-agent') || '',
-              sourceUrl: request.headers.get('referer') || 'https://soumissionconfort.com',
-            })
-          } catch (metaErr) {
-            console.error('⚠️ WEBHOOK: Meta CAPI error in GHL branch:', metaErr)
-          }
-        }
+        // Meta CAPI retiré (isolation 2026-06) : le canal partagé est désactivé.
+        // Le Lead Meta du funnel /analysis est émis par /api/leads (isolation
+        // only), pas par ce webhook.
 
         return NextResponse.json({
           success: true,
@@ -134,60 +114,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Initialize Meta Conversion API and track Lead event
-    initializeMeta()
-    if (isMetaConfigured()) {
-      // Calculate estimated project value for Meta tracking
-      const estimatedValue = leadData.pricing?.totalCost || 
-                           (leadData.property.roofArea ? leadData.property.roofArea * 10 : 5000) // Fallback estimation
-
-      // Get client information from request headers
-      const clientIp = request.headers.get('x-forwarded-for') || 
-                      request.headers.get('x-real-ip') || 
-                      '127.0.0.1'
-      const userAgent = request.headers.get('user-agent') || ''
-      const sourceUrl = request.headers.get('referer') || 'https://soumission-toiture.ai'
-
-      console.log('📊 Meta Lead Tracking - Client Info:', {
-        clientIp: clientIp,
-        userAgent: userAgent,
-        sourceUrl: sourceUrl,
-        estimatedValue: estimatedValue
-      })
-
-      try {
-        console.log('🚀 Starting Meta Lead tracking...')
-        const metaResult = await trackLead({
-          email: leadData.contact.email,
-          phone: leadData.contact.phone,
-          firstName: leadData.contact.firstName,
-          lastName: leadData.contact.lastName,
-          value: estimatedValue,
-          clientIp: clientIp,
-          userAgent: userAgent,
-          sourceUrl: sourceUrl
-        })
-
-        if (metaResult.success) {
-          console.log('✅ Meta Lead event tracked successfully for:', leadData.contact.email)
-        } else {
-          console.error('❌ Meta Lead tracking failed:', metaResult.error)
-          // Log detailed error for debugging
-          console.error('❌ Meta tracking error details:', JSON.stringify(metaResult.error, null, 2))
-        }
-      } catch (error) {
-        console.error('❌ Meta Lead tracking exception:', error)
-        console.error('❌ Meta tracking stack trace:', error instanceof Error ? error.stack : 'No stack trace')
-      }
-    } else {
-      console.warn('⚠️ Meta Conversion API not configured - skipping lead tracking')
-      console.warn('⚠️ Required env vars: NEXT_PUBLIC_META_PIXEL_ID, META_CONVERSION_ACCESS_TOKEN')
-      console.warn('⚠️ Current config:', {
-        pixelId: process.env.NEXT_PUBLIC_META_PIXEL_ID ? 'SET' : 'MISSING',
-        accessToken: process.env.META_CONVERSION_ACCESS_TOKEN ? 'SET' : 'MISSING',
-        testCode: process.env.META_TEST_EVENT_CODE ? 'SET' : 'NOT_SET'
-      })
-    }
+    // Meta CAPI Lead retiré (isolation 2026-06) : canal partagé désactivé.
+    // Le Lead Meta isolation est émis par /api/leads, pas par ce webhook.
 
     // Extract UTM parameters
     const utmParams = leadData.utmParams || {}
