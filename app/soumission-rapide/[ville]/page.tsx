@@ -25,14 +25,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     openGraph: {
       title,
       description,
-      url: `https://soumissionconfort.ai/soumission-rapide/${ville}`,
+      url: `https://soumissionconfort.com/soumission-rapide/${ville}`,
       siteName: "Soumission Confort",
       locale: "fr_CA",
       type: "website",
     },
     robots: { index: true, follow: true },
     alternates: {
-      canonical: `https://soumissionconfort.ai/soumission-rapide/${ville}`,
+      canonical: `https://soumissionconfort.com/soumission-rapide/${ville}`,
     },
   }
 }
@@ -47,7 +47,7 @@ export default async function SoumissionRapidePage({ params }: PageProps) {
     "@type": "LocalBusiness",
     name: "Soumission Confort",
     description: `Service de soumission d'isolation gratuit à ${municipality.name}. Entrepreneurs certifiés RBQ, vérifiés et interviewés.`,
-    url: `https://soumissionconfort.ai/soumission-rapide/${ville}`,
+    url: `https://soumissionconfort.com/soumission-rapide/${ville}`,
     areaServed: {
       "@type": "City",
       name: municipality.name,

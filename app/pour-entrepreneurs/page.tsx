@@ -532,7 +532,7 @@ export default function PourEntrepreneursPage() {
               <div className="space-y-2 text-gray-400">
                 <div className="flex items-center space-x-2">
                   <Mail className="w-4 h-4" />
-                  <span>pro@soumissionconfort.ai</span>
+                  <span>pro@soumissionconfort.com</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Phone className="w-4 h-4" />

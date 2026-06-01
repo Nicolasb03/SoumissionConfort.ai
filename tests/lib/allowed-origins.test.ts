@@ -25,8 +25,6 @@ describe("isAllowedOrigin — production hostnames", () => {
   it.each([
     "https://soumissionconfort.com",
     "https://www.soumissionconfort.com",
-    "https://soumissionconfort.ai",
-    "https://www.soumissionconfort.ai",
     "https://soumission-confort-ai.vercel.app",
   ])("allows %s", (origin) => {
     expect(isAllowedOrigin(makeRequest({ origin }))).toBe(true)
@@ -53,6 +51,8 @@ describe("isAllowedOrigin — denied origins", () => {
     "https://www.soumissionconfort.com.evil.io",
     "https://evil.vercel.app",
     "https://soumissionconfort-evil.com",
+    "https://soumissionconfort.ai",
+    "https://www.soumissionconfort.ai",
   ])("denies %s", (origin) => {
     expect(isAllowedOrigin(makeRequest({ origin }))).toBe(false)
   })

@@ -2,7 +2,6 @@ import type { NextRequest } from "next/server"
 
 const APEX_DOMAINS = [
   "soumissionconfort.com",
-  "soumissionconfort.ai",
 ] as const
 
 const PREVIEW_HOSTS = [
