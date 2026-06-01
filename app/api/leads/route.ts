@@ -813,7 +813,7 @@ export async function POST(request: NextRequest) {
               const stdMax = leadData.pricingData?.ranges?.standard?.totalCost?.max || 0
               const estimatedValue = (stdMin + stdMax) / 2
 
-              const origin = request.headers.get('origin') || 'https://soumissionconfort.ai'
+              const origin = request.headers.get('origin') || 'https://soumissionconfort.com'
 
               console.log(`📊 LEADS API: Sending server-side Meta Lead event for isolation (eventId: ${leadData.eventId || 'none'}, dedicated pixel)`)
 

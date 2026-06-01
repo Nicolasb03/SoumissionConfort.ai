@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
       value: 15000,
       clientIp,
       userAgent,
-      sourceUrl: `${request.headers.get('origin') || 'https://soumissionconfort.ai'}/thermopompes`,
+      sourceUrl: `${request.headers.get('origin') || 'https://soumissionconfort.com'}/thermopompes`,
       customData: {
         service_type: 'thermopompe',
         test_event: true
