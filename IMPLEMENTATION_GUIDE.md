@@ -754,7 +754,7 @@ vercel --prod
 - [Rénoclimat](https://www.transitionenergetique.gouv.qc.ca/residentiel/programmes/renoclimat)
 
 ### Contact
-- Email: support@soumissionconfort.ai
+- Email: support@soumissionconfort.com
 - Documentation interne: `/docs`
 
 ---

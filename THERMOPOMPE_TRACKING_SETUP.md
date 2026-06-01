@@ -59,7 +59,7 @@ if (isHVAC && successfulWebhooks > 0) {
         value: estimatedValue,
         clientIp,
         userAgent,
-        sourceUrl: `${request.headers.get('origin') || 'https://soumissionconfort.ai'}/thermopompes`,
+        sourceUrl: `${request.headers.get('origin') || 'https://soumissionconfort.com'}/thermopompes`,
         customData: {
           service_type: 'thermopompe'
         }
