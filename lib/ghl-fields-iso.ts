@@ -37,4 +37,8 @@ export const GHL_FIELDS_ISO: Record<string, GHLFieldDef> = {
   type_habitation: { id: 'gYP4OaxndoaSXgc1aN3Q', name: 'Type habitation', key: 'type_habitation', type: 'TEXT' },
   statut_proprietaire: { id: 'UNu3xqfPmSU5jlUA4sLp', name: 'Statut proprietaire', key: 'statut_proprietaire', type: 'TEXT' },
   eligible_subvention: { id: 'Y17HfEbVj0i4kzN4JPoz', name: 'Eligible subvention', key: 'eligible_subvention', type: 'TEXT' },
+  // V2 funnel fields (Phase 2 will wire these into the payload).
+  symptoms: { id: 'ZPE3HqwuNU2UFMPJoFLP', name: 'Symptoms', key: 'symptoms', type: 'TEXT' },
+  hydro_bracket: { id: '09Yv7GFbSI63gpw2dnMS', name: 'Hydro Bracket', key: 'hydro_bracket', type: 'TEXT' },
+  intent: { id: 'TXLCBATiEunuBmhBfiPk', name: 'Intent', key: 'intent', type: 'TEXT' },
 } as const

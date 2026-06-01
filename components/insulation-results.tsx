@@ -195,29 +195,6 @@ export function InsulationResults({ roofData, userAnswers, leadData, onComplete 
 
       {/* Trust Badges Section */}
       <TrustBadges />
-
-      {/* CTA Final */}
-      <div className="bg-[#f7fceb] border-2 border-[#b9e15c] rounded-[20px] shadow-md p-8 text-center">
-        <h3 className="font-heading text-2xl font-bold text-[#10002c] mb-4">
-          Prêt à économiser sur vos factures de chauffage?
-        </h3>
-        <p className="font-serif-body text-[#375371] mb-6 max-w-2xl mx-auto">
-          Obtenez des soumissions détaillées de 3 entrepreneurs certifiés dans votre région.
-          Comparez les prix, les garanties et choisissez le meilleur pour votre projet.
-        </p>
-        <button
-          onClick={() => {
-            track('Get Quotes CTA Clicked', { location: 'final_cta' })
-            onComplete()
-          }}
-          className="bg-[#b9e15c] border-2 border-[#002042] text-[#002042] font-heading font-bold py-5 px-12 rounded-full shadow-[-2px_4px_0_0_#002042] hover:shadow-[-1px_2px_0_0_#002042] hover:translate-y-0.5 transition-all text-lg"
-        >
-          Obtenir mes 3 soumissions gratuites
-        </button>
-        <p className="font-serif-body text-sm text-[#375371] mt-4">
-          ⏱️ 24-48h • 🔒 100% gratuit • 📞 Aucune obligation
-        </p>
-      </div>
     </div>
   )
 }

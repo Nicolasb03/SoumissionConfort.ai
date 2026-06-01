@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { META_PIXEL_PARTAGE } from "@/components/meta-pixel-router"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -264,9 +265,17 @@ export default function ThermopompesPage() {
     // Generate shared eventId for client/server deduplication
     const eventId = crypto.randomUUID();
 
-    // Facebook Pixel tracking (client-side) — fire before API for reliability
-    if (typeof window !== 'undefined' && (window as any).fbq) {
-      (window as any).fbq('track', 'Lead', {
+    // Facebook Pixel tracking (client-side) — fire before API for reliability.
+    // trackSingle targets the SHARED pixel only: a plain track() would fan out
+    // to the dedicated soumissionconfort pixel too if the user crossed the
+    // /analysis funnel earlier this session, polluting the isolation audience.
+    if (
+      typeof window !== 'undefined'
+      && typeof (window as any).fbq === 'function'
+      && META_PIXEL_PARTAGE
+      && !/^X+$/i.test(META_PIXEL_PARTAGE)
+    ) {
+      (window as any).fbq('trackSingle', META_PIXEL_PARTAGE, 'Lead', {
         service_type: 'thermopompe'
       }, { eventID: eventId });
     }

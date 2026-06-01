@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
 
     // Test ViewContent event
     console.log('🧪 Testing ViewContent event...')
-    const viewContentResult = await trackViewContent('Test Page', 'test')
+    const viewContentResult = await trackViewContent({ contentName: 'Test Page', contentType: 'test' })
     console.log('📊 ViewContent Result:', viewContentResult)
 
     // Test Lead event with sample data
