@@ -1,12 +1,10 @@
 "use client"
 
 import { AddressInput } from "@/components/address-input"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { getCurrentUTMParameters } from "@/lib/utm-utils"
 import { track } from '@vercel/analytics'
-import { initializeMeta, isMetaConfigured } from '@/lib/meta-config'
-import { trackViewContent } from '@/lib/meta-conversion-api'
 import { ChevronDown, Search, Menu, X } from 'lucide-react'
 
 function Logo() {
@@ -71,12 +69,10 @@ export default function HomePage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
-  useEffect(() => {
-    initializeMeta()
-    if (isMetaConfigured()) {
-      trackViewContent({ contentName: 'Homepage', contentType: 'website' }).catch(() => {})
-    }
-  }, [])
+  // Homepage ViewContent retiré (isolation 2026-06) : le canal partagé Meta est
+  // désactivé. C'était déjà no-op (META_CONVERSION_ACCESS_TOKEN n'est pas exposé
+  // au bundle browser), retiré pour qu'un futur ajout de NEXT_PUBLIC_ ne réactive
+  // pas une fuite par accident.
 
   const navigateToAnalysis = (address: string) => {
     if (!address.trim()) return
