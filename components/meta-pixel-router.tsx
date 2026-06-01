@@ -10,8 +10,16 @@ import { usePathname } from 'next/navigation'
 // invariant: a PageView fires to EXACTLY ONE pixel per route, and the dedicated
 // soumissionconfort pixel ONLY ever sees the isolation /analysis funnel.
 //   - /analysis*                          → dedicated pixel
+//   - /pricing                            → dedicated pixel (iso results page)
 //   - /verifier-telephone (analysis only) → dedicated pixel
 //   - everything else                     → shared Niku pixel (status quo)
+//
+// /pricing is the isolation results page (InsulationResults). It's reached ONLY
+// from the analysis lead form (lead-capture-form.tsx redirects there post-OTP),
+// so unlike /verifier-telephone it's classified by pathname alone — no source
+// marker needed, no cross-funnel ambiguity. Without this, the bottom-funnel
+// results PageView would leak onto the shared pixel (otp-verify is already
+// cleared by the time we land here, so a session-marker gate wouldn't work).
 //
 // /verifier-telephone is SHARED across funnels (analysis, thermopompes,
 // subventions all router.push there). Classifying it by pathname alone would
@@ -43,9 +51,12 @@ function isPlaceholder(v: string): boolean {
 }
 
 // True for routes that are UNCONDITIONALLY part of the analysis funnel (the
-// wizard pages). /verifier-telephone is handled separately because it's shared.
+// wizard pages + the /pricing results page). /verifier-telephone is handled
+// separately because it's shared across funnels.
 export function isAnalysisWizardRoute(pathname: string): boolean {
-  return pathname === '/analysis' || pathname.startsWith('/analysis/')
+  return pathname === '/analysis'
+    || pathname.startsWith('/analysis/')
+    || pathname === '/pricing'
 }
 
 // Reads the OTP source marker the analysis lead form stamps in sessionStorage.
