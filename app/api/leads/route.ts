@@ -322,7 +322,7 @@ export async function POST(request: NextRequest) {
               const stdMin = leadData.pricingData?.ranges?.standard?.totalCost?.min || 0
               const stdMax = leadData.pricingData?.ranges?.standard?.totalCost?.max || 0
               const estimatedValue = (stdMin + stdMax) / 2
-              const origin = request.headers.get('origin') || 'https://soumissionconfort.com'
+              const origin = request.headers.get('origin') || 'https://www.soumissionconfort.com'
               await metaAPI.trackLead({
                 email: leadData.email,
                 phone: leadData.phone,
@@ -813,7 +813,7 @@ export async function POST(request: NextRequest) {
               const stdMax = leadData.pricingData?.ranges?.standard?.totalCost?.max || 0
               const estimatedValue = (stdMin + stdMax) / 2
 
-              const origin = request.headers.get('origin') || 'https://soumissionconfort.com'
+              const origin = request.headers.get('origin') || 'https://www.soumissionconfort.com'
 
               console.log(`📊 LEADS API: Sending server-side Meta Lead event for isolation (eventId: ${leadData.eventId || 'none'}, dedicated pixel)`)
 
