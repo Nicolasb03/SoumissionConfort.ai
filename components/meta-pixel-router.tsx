@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Script from 'next/script'
 import { usePathname } from 'next/navigation'
 
@@ -106,6 +106,13 @@ export function MetaPixelRouter() {
   const initedRef = useRef<Set<string>>(new Set())
   // Guard against StrictMode double-effect / duplicate PageView per route.
   const lastPageViewRef = useRef<string | null>(null)
+  // fbq is bootstrapped by an afterInteractive <Script> that may execute AFTER
+  // this effect's first run. With dep [pathname] alone the effect would never
+  // re-run on the home route, so a fbq-not-ready-yet first paint would silently
+  // MISS the home PageView. onReady flips this flag → the effect re-runs once
+  // fbq is live. (Race is pre-existing, but now load-bearing: '/' is the only
+  // route that fires PageView, and it's the cold-load route.)
+  const [fbqReady, setFbqReady] = useState(false)
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.fbq !== 'function') return
@@ -147,7 +154,7 @@ export function MetaPixelRouter() {
       lastPageViewRef.current = pageViewKey
       window.fbq('trackSingle', pixelForRoute, 'PageView')
     }
-  }, [pathname])
+  }, [pathname, fbqReady])
 
   // The bootstrap snippet loads the fbq library exactly once for the whole
   // app. We deliberately do NOT call fbq('init'/'track') inside it — the
@@ -157,7 +164,7 @@ export function MetaPixelRouter() {
 
   return (
     <>
-      <Script id="meta-pixel-bootstrap" strategy="afterInteractive">
+      <Script id="meta-pixel-bootstrap" strategy="afterInteractive" onReady={() => setFbqReady(true)}>
         {`
           !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
           n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
