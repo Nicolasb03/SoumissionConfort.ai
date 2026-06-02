@@ -24,6 +24,7 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://www.soumissionconfort.com'),
   title: "Soumission Confort - Estimation Gratuite d'Isolation d'Entretoit au Québec",
   description: "Obtenez votre estimation gratuite d'isolation d'entretoit en 60 secondes. Connectez-vous avec des entrepreneurs certifiés RBQ. Économisez jusqu'à 30% sur vos factures de chauffage. Subventions disponibles avec Hydro-Québec et RénoClimat.",
   generator: 'v0.dev',
@@ -36,7 +37,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Soumission Confort - Estimation Gratuite d'Isolation d'Entretoit au Québec",
     description: "Obtenez votre estimation gratuite d'isolation d'entretoit en 60 secondes. Connectez-vous avec des entrepreneurs certifiés RBQ. Économisez jusqu'à 30% sur vos factures de chauffage. Subventions disponibles avec Hydro-Québec et RénoClimat.",
-    url: 'https://soumissionconfort.com',
+    url: 'https://www.soumissionconfort.com',
     siteName: 'Soumission Confort',
     locale: 'fr_CA',
     type: 'website',
@@ -61,7 +62,7 @@ export default function RootLayout({
     "@type": "LocalBusiness",
     "name": "Soumission Confort",
     "description": "Estimation gratuite d'isolation d'entretoit au Québec. Entrepreneurs certifiés RBQ, subventions disponibles avec Hydro-Québec, LogisVert et RénoClimat.",
-    "url": "https://soumissionconfort.com",
+    "url": "https://www.soumissionconfort.com",
     "telephone": "+1-800-CONFORT",
     "priceRange": "$$",
     "areaServed": [
