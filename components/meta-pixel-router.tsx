@@ -8,22 +8,28 @@ import { usePathname } from 'next/navigation'
 //
 // One <MetaPixelRouter /> is mounted once in app/layout.tsx. It guarantees the
 // invariant: the dedicated soumissionconfort pixel ONLY ever sees the isolation
-// funnel, and a PageView fires EXACTLY ONCE — owed by the home entry '/'.
-//   - '/' (home, address entry)           → dedicated pixel: INIT + owes PageView
-//   - /analysis*                          → dedicated pixel: INIT only (no new PageView)
-//   - /pricing                            → dedicated pixel: INIT only (no new PageView)
-//   - /verifier-telephone (analysis only) → dedicated pixel: INIT only (no new PageView)
+// funnel, and a PageView fires EXACTLY ONCE per session — owed by the FIRST
+// dedicated-pixel route the visitor hits (the funnel entry), then flushed once.
+//   - '/' (home, address entry)           → dedicated pixel: INIT, owes the PageView
+//   - /analysis*                          → dedicated pixel: INIT (owes it if entered here)
+//   - /pricing                            → dedicated pixel: INIT (owes it if entered here)
+//   - /verifier-telephone (analysis only) → dedicated pixel: INIT (owes it if entered here)
 //   - everything else                     → shared Niku pixel (status quo, '')
 //
-// Why the funnel routes still INIT: the wizard ViewContent (user-questionnaire-
-// wizard.tsx) and the post-OTP Lead (verifier-telephone/page.tsx) call
-// fbq('trackSingle', META_PIXEL_DEDIE, ...) directly and need an initialised
-// pixel. Zack wants ONE PageView (the home arrival), not one per SPA route — so
-// the home visit OWES a single PageView, flushed as soon as fbq is live,
-// regardless of the route the visitor is on by then. Normal case: fbq is ready
-// on '/' and it fires there. Cold-load race (fbq boots after a fast '/' →
-// '/analysis' nav): it flushes on the next route instead — still exactly once,
-// never lost, never duplicated.
+// The PageView is tied to the funnel VISIT, not to a single route: the first
+// dedicated route owes it (so a visitor entering via '/', a deep-link to
+// /analysis, or a Toiture landing page that pushes into /analysis all get
+// exactly one), and it's flushed as soon as fbq is live — on whatever route the
+// visitor is on by then. Normal flow: '/' owes it and it fires on '/'. Once
+// fired, no route fires another. Two things make this exact:
+//   1. disablePushState — fbevents auto-fires a PageView on every history
+//      pushState (SPA nav) by default; we turn that off and emit the one
+//      PageView ourselves, so route changes add nothing.
+//   2. the fired-flag debt — survives a fast nav before fbq boots and dedups
+//      StrictMode / re-renders, so it's never lost and never duplicated.
+// The funnel routes still INIT regardless because the wizard ViewContent
+// (user-questionnaire-wizard.tsx) and post-OTP Lead (verifier-telephone/
+// page.tsx) call fbq('trackSingle', META_PIXEL_DEDIE, ...) directly.
 //
 // /pricing is the isolation results page (InsulationResults). It's reached ONLY
 // from the analysis lead form (lead-capture-form.tsx redirects there post-OTP),
@@ -107,25 +113,29 @@ export function MetaPixelRouter() {
   const pathname = usePathname()
   // Track which pixels we've already `init`-ed so we never double-init.
   const initedRef = useRef<Set<string>>(new Set())
-  // The home '/' entry owes EXACTLY ONE PageView. We capture it as a pending
-  // debt the moment we see '/', then flush it as soon as fbq is live — even if
-  // the visitor has already navigated away from '/'. This is what makes the
-  // single PageView survive a fast '/' → '/analysis' nav before fbq booted: the
-  // event is owed to the home VISIT, not to the pathname at fbq-ready time.
-  const homePageViewPendingRef = useRef(false)
-  const homePageViewFiredRef = useRef(false)
+  // The isolation funnel owes EXACTLY ONE PageView, captured as a debt the first
+  // time the visitor hits ANY dedicated-pixel route — the home '/', a deep-link
+  // to /analysis, or a landing page (e.g. /urgence-toiture, /couvreur-shawinigan)
+  // that pushes into /analysis. It's flushed once, as soon as fbq is live, even
+  // if the visitor navigated on before fbq booted. Tying it to the funnel VISIT
+  // (not the pathname at fbq-ready time) is what keeps it exactly-once and never
+  // lost. Non-funnel routes never set the debt → never fire a PageView.
+  const funnelPageViewPendingRef = useRef(false)
+  const funnelPageViewFiredRef = useRef(false)
   // fbq is bootstrapped by an afterInteractive <Script> that may execute AFTER
   // this effect's first run. onReady flips this flag → the effect re-runs once
-  // fbq is live so the owed home PageView can flush. ('/' is the only route
-  // that emits PageView and it's the cold-load route, so this must be robust.)
+  // fbq is live so the owed PageView can flush (the cold-load route is exactly
+  // where fbq is least likely to be ready in time, so this must be robust).
   const [fbqReady, setFbqReady] = useState(false)
 
   useEffect(() => {
-    // Capture the home-entry PageView debt the moment we see '/', regardless of
-    // fbq readiness (pure check, no window needed). It survives navigation away
-    // from '/', so a visitor who leaves before fbq boots still gets the event.
-    if (isPixelEntryPoint(pathname) && !homePageViewFiredRef.current) {
-      homePageViewPendingRef.current = true
+    // Capture the funnel-entry PageView debt the moment we land on any
+    // dedicated-pixel route, regardless of fbq readiness (pure check, no window
+    // needed). It survives navigation away, so a visitor who leaves before fbq
+    // boots still gets exactly one PageView.
+    const onDedicatedRoute = isPixelEntryPoint(pathname) || inAnalysisFunnelClient(pathname)
+    if (onDedicatedRoute && !funnelPageViewFiredRef.current) {
+      funnelPageViewPendingRef.current = true
     }
 
     if (typeof window === 'undefined' || typeof window.fbq !== 'function') return
@@ -134,17 +144,16 @@ export function MetaPixelRouter() {
     // the library fires a PageView on EVERY history.pushState (every client
     // route change), which would re-add one PageView per funnel route —
     // precisely what this change removes. We own the single PageView explicitly
-    // (home debt, below), so the automatic one must be off. Set before the first
-    // fbq('init'). Ref: https://developers.facebook.com/docs/meta-pixel/get-started/
+    // (funnel debt, below), so the automatic one must be off. Set before the
+    // first fbq('init'). Ref: https://developers.facebook.com/docs/meta-pixel/get-started/
     const fbqWithFlags = window.fbq as unknown as { disablePushState?: boolean }
     fbqWithFlags.disablePushState = true
 
-    const inFunnel = inAnalysisFunnelClient(pathname)
-    // Routes that need the dedicated pixel live: the funnel routes (the wizard
-    // ViewContent + post-OTP Lead target META_PIXEL_DEDIE directly), PLUS any
-    // route where we still owe the home PageView (so it can flush even after the
-    // visitor left '/'). Everything else falls to PIXEL_PARTAGE ('') = no-op.
-    const needsDedicated = inFunnel || homePageViewPendingRef.current
+    // The dedicated pixel must be live on dedicated routes (the wizard
+    // ViewContent + post-OTP Lead target META_PIXEL_DEDIE directly), AND on any
+    // route while we still owe the PageView (so it can flush even after the
+    // visitor left the route that owed it). Everything else → PIXEL_PARTAGE ('').
+    const needsDedicated = onDedicatedRoute || funnelPageViewPendingRef.current
     const pixelForRoute = needsDedicated ? META_PIXEL_DEDIE : PIXEL_PARTAGE
     // Strict guard (Zack v2 décision 5): if the dedicated pixel is missing/
     // placeholder, fire NOTHING — never leak onto the shared pixel.
@@ -159,14 +168,13 @@ export function MetaPixelRouter() {
       initedRef.current.add(pixelForRoute)
     }
 
-    // Flush the owed home PageView EXACTLY ONCE, as soon as fbq is live. It
-    // fires on whatever route the visitor is on now (covers the cold-load race
-    // where fbq boots after they left '/'). The fired-flag guarantees
-    // exactly-once across StrictMode / re-renders / SPA nav; no other route ever
-    // emits a PageView.
-    if (homePageViewPendingRef.current && !homePageViewFiredRef.current) {
-      homePageViewFiredRef.current = true
-      homePageViewPendingRef.current = false
+    // Flush the owed funnel-entry PageView EXACTLY ONCE, as soon as fbq is live.
+    // It fires on whatever route the visitor is on now (covers the cold-load
+    // race where fbq boots after they left the entry route). The fired-flag
+    // guarantees exactly-once across StrictMode / re-renders / SPA nav.
+    if (funnelPageViewPendingRef.current && !funnelPageViewFiredRef.current) {
+      funnelPageViewFiredRef.current = true
+      funnelPageViewPendingRef.current = false
       window.fbq('trackSingle', META_PIXEL_DEDIE, 'PageView')
     }
   }, [pathname, fbqReady])
