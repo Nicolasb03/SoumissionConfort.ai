@@ -200,19 +200,23 @@ export default function VerifierTelephonePage() {
           const pending = JSON.parse(pendingRaw)
           if (
             pending?.meta?.intent === "qualified" &&
+            typeof pending.eventId === "string" &&
+            pending.eventId &&
             typeof window !== "undefined" &&
             typeof window.fbq === "function" &&
             META_PIXEL_DEDIE &&
             !/^X+$/i.test(META_PIXEL_DEDIE)
           ) {
-            const leadEventId =
-              pending.eventId ||
-              ("randomUUID" in crypto ? crypto.randomUUID() : `lead-${Date.now()}`)
+            // Fire the browser Lead with the SAME eventId the CAPI Lead
+            // (/api/leads) uses → Meta dedups browser↔CAPI to ONE Lead. A fresh
+            // random id would NOT match the CAPI id and double-count. If eventId
+            // is missing (corrupt/stale sessionStorage), skip the browser pixel:
+            // the CAPI Lead still fires → counted once, never dropped.
             window.fbq("trackSingle", META_PIXEL_DEDIE, "Lead", {
               value: Number(pending.meta.estimatedValue || 0).toFixed(2),
               currency: "CAD",
               service_type: "isolation",
-            }, { eventID: leadEventId })
+            }, { eventID: pending.eventId })
           }
         }
       } catch (err) {
