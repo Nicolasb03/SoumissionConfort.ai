@@ -23,12 +23,16 @@ import { usePathname } from 'next/navigation'
 // The PageView is tied to the funnel VISIT, not to a single route: the first
 // dedicated route owes it (so a visitor entering via '/', a deep-link to
 // /analysis, or a Toiture landing page that pushes into /analysis all get
-// exactly one), and it's flushed as soon as fbq is live — on whatever route the
-// visitor is on by then. Normal flow: '/' owes it and it fires on '/'. Once
+// exactly one), and it's flushed as soon as fbq is live — but ONLY while on a
+// dedicated route (the flush is behind the dedicated-pixel guard). If the
+// visitor bounces to a shared/non-funnel page before fbq boots, the owed
+// PageView is dropped rather than stamped with a non-funnel URL — isolation
+// wins over completeness. Normal flow: '/' owes it and it fires on '/'. Once
 // fired, no route fires another. Two things make this exact:
 //   1. disablePushState — fbevents auto-fires a PageView on every history
-//      pushState (SPA nav) by default; we turn that off and emit the one
-//      PageView ourselves, so route changes add nothing.
+//      pushState (SPA nav) by default; we set fbq.disablePushState=true in the
+//      bootstrap <Script> BEFORE fbevents loads (so its listener never installs)
+//      and emit the one PageView ourselves, so route changes add nothing.
 //   2. the fired-flag debt — survives a fast nav before fbq boots and dedups
 //      StrictMode / re-renders, so it's never lost and never duplicated.
 // The funnel routes still INIT regardless because the wizard ViewContent
@@ -144,21 +148,15 @@ export function MetaPixelRouter() {
 
     if (typeof window === 'undefined' || typeof window.fbq !== 'function') return
 
-    // Disable fbevents' automatic PageView on SPA history pushState. By default
-    // the library fires a PageView on EVERY history.pushState (every client
-    // route change), which would re-add one PageView per funnel route —
-    // precisely what this change removes. We own the single PageView explicitly
-    // (funnel debt, below), so the automatic one must be off. Set before the
-    // first fbq('init'). Ref: https://developers.facebook.com/docs/meta-pixel/get-started/
-    const fbqWithFlags = window.fbq as unknown as { disablePushState?: boolean }
-    fbqWithFlags.disablePushState = true
-
-    // The dedicated pixel must be live on dedicated routes (the wizard
-    // ViewContent + post-OTP Lead target META_PIXEL_DEDIE directly), AND on any
-    // route while we still owe the PageView (so it can flush even after the
-    // visitor left the route that owed it). Everything else → PIXEL_PARTAGE ('').
-    const needsDedicated = onDedicatedRoute || funnelPageViewPendingRef.current
-    const pixelForRoute = needsDedicated ? META_PIXEL_DEDIE : PIXEL_PARTAGE
+    // Only dedicated routes load the dedicated pixel. We deliberately do NOT add
+    // the pending debt to this condition: the owed PageView must flush on a
+    // dedicated route, NEVER on a shared/non-funnel page the visitor bounced to
+    // before fbq booted — firing there would stamp a non-funnel
+    // event_source_url onto the dedicated pixel (isolation leak). If the visitor
+    // leaves the funnel before fbq is live, the owed PageView is simply not
+    // fired — correct, they didn't meaningfully enter. (disablePushState is set
+    // in the bootstrap <Script> below, before fbevents loads its listener.)
+    const pixelForRoute = onDedicatedRoute ? META_PIXEL_DEDIE : PIXEL_PARTAGE
     // Strict guard (Zack v2 décision 5): if the dedicated pixel is missing/
     // placeholder, fire NOTHING — never leak onto the shared pixel.
     if (isPlaceholder(pixelForRoute)) return
@@ -173,8 +171,8 @@ export function MetaPixelRouter() {
     }
 
     // Flush the owed funnel-entry PageView EXACTLY ONCE, as soon as fbq is live.
-    // It fires on whatever route the visitor is on now (covers the cold-load
-    // race where fbq boots after they left the entry route). The fired-flag
+    // We only reach here on a dedicated route (guard above), so the PageView is
+    // always stamped with a funnel URL — never a shared page. The fired-flag
     // guarantees exactly-once across StrictMode / re-renders / SPA nav.
     if (funnelPageViewPendingRef.current && !funnelPageViewFiredRef.current) {
       funnelPageViewFiredRef.current = true
@@ -198,6 +196,7 @@ export function MetaPixelRouter() {
           n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
           t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
           document,'script','https://connect.facebook.net/en_US/fbevents.js');
+          window.fbq.disablePushState = true;
         `}
       </Script>
       {/* noscript fallback uses the shared pixel — the no-JS case never reaches
