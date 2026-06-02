@@ -7,12 +7,20 @@ import { usePathname } from 'next/navigation'
 // Phase 2 V2 — route-aware Meta Pixel loader.
 //
 // One <MetaPixelRouter /> is mounted once in app/layout.tsx. It guarantees the
-// invariant: a PageView fires to EXACTLY ONE pixel per route, and the dedicated
-// soumissionconfort pixel ONLY ever sees the isolation /analysis funnel.
-//   - /analysis*                          → dedicated pixel
-//   - /pricing                            → dedicated pixel (iso results page)
-//   - /verifier-telephone (analysis only) → dedicated pixel
-//   - everything else                     → shared Niku pixel (status quo)
+// invariant: the dedicated soumissionconfort pixel ONLY ever sees the isolation
+// funnel, and a PageView fires EXACTLY ONCE — on the home entry point '/'.
+//   - '/' (home, address entry)           → dedicated pixel: INIT + PageView
+//   - /analysis*                          → dedicated pixel: INIT only (no PageView)
+//   - /pricing                            → dedicated pixel: INIT only (no PageView)
+//   - /verifier-telephone (analysis only) → dedicated pixel: INIT only (no PageView)
+//   - everything else                     → shared Niku pixel (status quo, '')
+//
+// Why the funnel routes still INIT (but don't PageView): the wizard ViewContent
+// (user-questionnaire-wizard.tsx) and the post-OTP Lead (verifier-telephone/
+// page.tsx) call fbq('trackSingle', META_PIXEL_DEDIE, ...) directly and need an
+// initialised pixel. They emit NO PageView — Zack wants ONE PageView (the home
+// arrival), not one per SPA route. So PageView is gated to the entry point '/',
+// while init runs on every dedicated-pixel route.
 //
 // /pricing is the isolation results page (InsulationResults). It's reached ONLY
 // from the analysis lead form (lead-capture-form.tsx redirects there post-OTP),
@@ -62,6 +70,15 @@ export function isAnalysisWizardRoute(pathname: string): boolean {
     || pathname === '/pricing'
 }
 
+// '/' (home iso) is the single Meta PageView entry point — the page with the
+// address field, where the visitor "arrives". It's NOT part of the bottom
+// funnel (no wizard, no lead form) so it's classified separately from
+// inAnalysisFunnelClient: PageView fires here and ONLY here, while the funnel
+// routes init the pixel without emitting a PageView.
+export function isPixelEntryPoint(pathname: string): boolean {
+  return pathname === '/'
+}
+
 // Reads the OTP source marker the analysis lead form stamps in sessionStorage.
 // Only meaningful on /verifier-telephone, and only client-side.
 function otpSourceIsAnalysis(): boolean {
@@ -93,11 +110,17 @@ export function MetaPixelRouter() {
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.fbq !== 'function') return
 
+    // The dedicated pixel must be INITIALISED on BOTH the entry point ('/') and
+    // the funnel routes — the funnel routes need it live so the wizard
+    // ViewContent and post-OTP Lead (which target META_PIXEL_DEDIE directly)
+    // land on an initialised pixel. PageView, however, fires on '/' ONLY.
+    const isEntry = isPixelEntryPoint(pathname)
     const inFunnel = inAnalysisFunnelClient(pathname)
-    // Strict guard (Zack v2 décision 5): on the /analysis funnel, if the
-    // dedicated pixel is missing/placeholder, fire NOTHING — never leak the
-    // funnel onto the shared pixel during rollout.
-    const pixelForRoute = inFunnel ? META_PIXEL_DEDIE : PIXEL_PARTAGE
+    const needsDedicated = isEntry || inFunnel
+    // Strict guard (Zack v2 décision 5): on any dedicated-pixel route, if the
+    // pixel is missing/placeholder, fire NOTHING — never leak onto the shared
+    // pixel during rollout.
+    const pixelForRoute = needsDedicated ? META_PIXEL_DEDIE : PIXEL_PARTAGE
     if (isPlaceholder(pixelForRoute)) return
 
     // Init this pixel once (idempotent across navigations).
@@ -110,6 +133,11 @@ export function MetaPixelRouter() {
       window.fbq('init', pixelForRoute)
       initedRef.current.add(pixelForRoute)
     }
+
+    // PageView fires ONLY on the entry point ('/'). The funnel routes init the
+    // pixel above but emit no PageView (Zack wants exactly ONE PageView, on the
+    // home page — not one per SPA route).
+    if (!isEntry) return
 
     // Fire PageView to THIS pixel only — never the other one. The dedupe key
     // pins it to (pixel, pathname) so StrictMode's double effect doesn't send
