@@ -8,8 +8,12 @@ import { usePathname } from 'next/navigation'
 //
 // One <MetaPixelRouter /> is mounted once in app/layout.tsx. It guarantees the
 // invariant: the dedicated soumissionconfort pixel ONLY ever sees the isolation
-// funnel, and a PageView fires EXACTLY ONCE per session — owed by the FIRST
-// dedicated-pixel route the visitor hits (the funnel entry), then flushed once.
+// funnel, and a PageView fires EXACTLY ONCE per page load (SPA mount) — owed by
+// the FIRST dedicated-pixel route the visitor hits (the funnel entry), then
+// flushed once. A genuine document reload (F5) is a new page load and fires a
+// fresh PageView — that's standard Meta behaviour, not a duplicate; the
+// fired-flag only dedups within a single SPA mount (StrictMode, re-renders, and
+// all client-side navigations).
 //   - '/' (home, address entry)           → dedicated pixel: INIT, owes the PageView
 //   - /analysis*                          → dedicated pixel: INIT (owes it if entered here)
 //   - /pricing                            → dedicated pixel: INIT (owes it if entered here)
