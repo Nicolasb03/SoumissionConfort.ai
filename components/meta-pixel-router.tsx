@@ -8,19 +8,22 @@ import { usePathname } from 'next/navigation'
 //
 // One <MetaPixelRouter /> is mounted once in app/layout.tsx. It guarantees the
 // invariant: the dedicated soumissionconfort pixel ONLY ever sees the isolation
-// funnel, and a PageView fires EXACTLY ONCE — on the home entry point '/'.
-//   - '/' (home, address entry)           → dedicated pixel: INIT + PageView
-//   - /analysis*                          → dedicated pixel: INIT only (no PageView)
-//   - /pricing                            → dedicated pixel: INIT only (no PageView)
-//   - /verifier-telephone (analysis only) → dedicated pixel: INIT only (no PageView)
+// funnel, and a PageView fires EXACTLY ONCE — owed by the home entry '/'.
+//   - '/' (home, address entry)           → dedicated pixel: INIT + owes PageView
+//   - /analysis*                          → dedicated pixel: INIT only (no new PageView)
+//   - /pricing                            → dedicated pixel: INIT only (no new PageView)
+//   - /verifier-telephone (analysis only) → dedicated pixel: INIT only (no new PageView)
 //   - everything else                     → shared Niku pixel (status quo, '')
 //
-// Why the funnel routes still INIT (but don't PageView): the wizard ViewContent
-// (user-questionnaire-wizard.tsx) and the post-OTP Lead (verifier-telephone/
-// page.tsx) call fbq('trackSingle', META_PIXEL_DEDIE, ...) directly and need an
-// initialised pixel. They emit NO PageView — Zack wants ONE PageView (the home
-// arrival), not one per SPA route. So PageView is gated to the entry point '/',
-// while init runs on every dedicated-pixel route.
+// Why the funnel routes still INIT: the wizard ViewContent (user-questionnaire-
+// wizard.tsx) and the post-OTP Lead (verifier-telephone/page.tsx) call
+// fbq('trackSingle', META_PIXEL_DEDIE, ...) directly and need an initialised
+// pixel. Zack wants ONE PageView (the home arrival), not one per SPA route — so
+// the home visit OWES a single PageView, flushed as soon as fbq is live,
+// regardless of the route the visitor is on by then. Normal case: fbq is ready
+// on '/' and it fires there. Cold-load race (fbq boots after a fast '/' →
+// '/analysis' nav): it flushes on the next route instead — still exactly once,
+// never lost, never duplicated.
 //
 // /pricing is the isolation results page (InsulationResults). It's reached ONLY
 // from the analysis lead form (lead-capture-form.tsx redirects there post-OTP),
@@ -104,55 +107,67 @@ export function MetaPixelRouter() {
   const pathname = usePathname()
   // Track which pixels we've already `init`-ed so we never double-init.
   const initedRef = useRef<Set<string>>(new Set())
-  // Guard against StrictMode double-effect / duplicate PageView per route.
-  const lastPageViewRef = useRef<string | null>(null)
+  // The home '/' entry owes EXACTLY ONE PageView. We capture it as a pending
+  // debt the moment we see '/', then flush it as soon as fbq is live — even if
+  // the visitor has already navigated away from '/'. This is what makes the
+  // single PageView survive a fast '/' → '/analysis' nav before fbq booted: the
+  // event is owed to the home VISIT, not to the pathname at fbq-ready time.
+  const homePageViewPendingRef = useRef(false)
+  const homePageViewFiredRef = useRef(false)
   // fbq is bootstrapped by an afterInteractive <Script> that may execute AFTER
-  // this effect's first run. With dep [pathname] alone the effect would never
-  // re-run on the home route, so a fbq-not-ready-yet first paint would silently
-  // MISS the home PageView. onReady flips this flag → the effect re-runs once
-  // fbq is live. (Race is pre-existing, but now load-bearing: '/' is the only
-  // route that fires PageView, and it's the cold-load route.)
+  // this effect's first run. onReady flips this flag → the effect re-runs once
+  // fbq is live so the owed home PageView can flush. ('/' is the only route
+  // that emits PageView and it's the cold-load route, so this must be robust.)
   const [fbqReady, setFbqReady] = useState(false)
 
   useEffect(() => {
+    // Capture the home-entry PageView debt the moment we see '/', regardless of
+    // fbq readiness (pure check, no window needed). It survives navigation away
+    // from '/', so a visitor who leaves before fbq boots still gets the event.
+    if (isPixelEntryPoint(pathname) && !homePageViewFiredRef.current) {
+      homePageViewPendingRef.current = true
+    }
+
     if (typeof window === 'undefined' || typeof window.fbq !== 'function') return
 
-    // The dedicated pixel must be INITIALISED on BOTH the entry point ('/') and
-    // the funnel routes — the funnel routes need it live so the wizard
-    // ViewContent and post-OTP Lead (which target META_PIXEL_DEDIE directly)
-    // land on an initialised pixel. PageView, however, fires on '/' ONLY.
-    const isEntry = isPixelEntryPoint(pathname)
+    // Disable fbevents' automatic PageView on SPA history pushState. By default
+    // the library fires a PageView on EVERY history.pushState (every client
+    // route change), which would re-add one PageView per funnel route —
+    // precisely what this change removes. We own the single PageView explicitly
+    // (home debt, below), so the automatic one must be off. Set before the first
+    // fbq('init'). Ref: https://developers.facebook.com/docs/meta-pixel/get-started/
+    const fbqWithFlags = window.fbq as unknown as { disablePushState?: boolean }
+    fbqWithFlags.disablePushState = true
+
     const inFunnel = inAnalysisFunnelClient(pathname)
-    const needsDedicated = isEntry || inFunnel
-    // Strict guard (Zack v2 décision 5): on any dedicated-pixel route, if the
-    // pixel is missing/placeholder, fire NOTHING — never leak onto the shared
-    // pixel during rollout.
+    // Routes that need the dedicated pixel live: the funnel routes (the wizard
+    // ViewContent + post-OTP Lead target META_PIXEL_DEDIE directly), PLUS any
+    // route where we still owe the home PageView (so it can flush even after the
+    // visitor left '/'). Everything else falls to PIXEL_PARTAGE ('') = no-op.
+    const needsDedicated = inFunnel || homePageViewPendingRef.current
     const pixelForRoute = needsDedicated ? META_PIXEL_DEDIE : PIXEL_PARTAGE
+    // Strict guard (Zack v2 décision 5): if the dedicated pixel is missing/
+    // placeholder, fire NOTHING — never leak onto the shared pixel.
     if (isPlaceholder(pixelForRoute)) return
 
-    // Init this pixel once (idempotent across navigations).
+    // Init once (idempotent). Disable Meta's auto-event detection BEFORE init so
+    // no `SubscribedButtonClick`-style auto events leak — we fire only what we
+    // emit explicitly.
     if (!initedRef.current.has(pixelForRoute)) {
-      // Disable Meta's automatic event detection (button/form clicks etc.) for
-      // this pixel — we only want the events we fire explicitly. Without this,
-      // the pixel emits auto events like `SubscribedButtonClick`. Set BEFORE
-      // init so it applies from the first event.
       window.fbq('set', 'autoConfig', false, pixelForRoute)
       window.fbq('init', pixelForRoute)
       initedRef.current.add(pixelForRoute)
     }
 
-    // PageView fires ONLY on the entry point ('/'). The funnel routes init the
-    // pixel above but emit no PageView (Zack wants exactly ONE PageView, on the
-    // home page — not one per SPA route).
-    if (!isEntry) return
-
-    // Fire PageView to THIS pixel only — never the other one. The dedupe key
-    // pins it to (pixel, pathname) so StrictMode's double effect doesn't send
-    // two PageViews for the same route in dev.
-    const pageViewKey = `${pixelForRoute}:${pathname}`
-    if (lastPageViewRef.current !== pageViewKey) {
-      lastPageViewRef.current = pageViewKey
-      window.fbq('trackSingle', pixelForRoute, 'PageView')
+    // Flush the owed home PageView EXACTLY ONCE, as soon as fbq is live. It
+    // fires on whatever route the visitor is on now (covers the cold-load race
+    // where fbq boots after they left '/'). The fired-flag guarantees
+    // exactly-once across StrictMode / re-renders / SPA nav; no other route ever
+    // emits a PageView.
+    if (homePageViewPendingRef.current && !homePageViewFiredRef.current) {
+      homePageViewFiredRef.current = true
+      homePageViewPendingRef.current = false
+      window.fbq('trackSingle', META_PIXEL_DEDIE, 'PageView')
     }
   }, [pathname, fbqReady])
 
