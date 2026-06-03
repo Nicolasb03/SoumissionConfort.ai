@@ -72,7 +72,10 @@ export const META_PIXEL_PARTAGE = ''
 const PIXEL_PARTAGE = META_PIXEL_PARTAGE
 // Exported so the wizard ViewContent + post-OTP Lead can target the dedicated
 // pixel with trackSingle (browser dedup vs CAPI).
-export const META_PIXEL_DEDIE = process.env.NEXT_PUBLIC_META_PIXEL_ID_SOUMISSIONCONFORT || ''
+// .trim() guards a trailing newline/space in the Vercel env value: a stray \n
+// makes fbq init/trackSingle target "<id>\n" → "Pixel <id> not found" and zero
+// PageView/Lead fire (incident 2026-06-03). Pixel ids never have edge whitespace.
+export const META_PIXEL_DEDIE = (process.env.NEXT_PUBLIC_META_PIXEL_ID_SOUMISSIONCONFORT || '').trim()
 
 function isPlaceholder(v: string): boolean {
   return !v || /^X+$/i.test(v)

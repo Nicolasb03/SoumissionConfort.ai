@@ -299,9 +299,12 @@ export async function POST(request: NextRequest) {
           if (vertical !== 'isolation') {
             console.log(`[leads] skip Meta CAPI Lead — vertical='${vertical}' (shared channel disabled)`)
           } else {
-            const metaPixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID_SOUMISSIONCONFORT
-            const metaAccessToken = process.env.META_CONVERSION_ACCESS_TOKEN_SOUMISSIONCONFORT
-            const metaTestEventCode = process.env.META_TEST_EVENT_CODE_SOUMISSIONCONFORT
+            // .trim(): a trailing \n in the Vercel env value makes the CAPI POST
+            // hit graph.facebook.com/<id>%0A/events → Lead silently lost (incident
+            // 2026-06-03). Ids/tokens never carry meaningful edge whitespace.
+            const metaPixelId = (process.env.NEXT_PUBLIC_META_PIXEL_ID_SOUMISSIONCONFORT || '').trim()
+            const metaAccessToken = (process.env.META_CONVERSION_ACCESS_TOKEN_SOUMISSIONCONFORT || '').trim()
+            const metaTestEventCode = (process.env.META_TEST_EVENT_CODE_SOUMISSIONCONFORT || '').trim() || undefined
 
             const isPlaceholder = (v?: string) => !!v && /^X+$/i.test(v)
             // Isolation Lead stays intent-gated (Zack v2 décision : qualified only).
@@ -788,9 +791,12 @@ export async function POST(request: NextRequest) {
           if (leadType !== 'isolation') {
             console.log(`[leads] skip Meta CAPI Lead — leadType='${leadType}', shared channel disabled (legacy path)`)
           } else {
-            const metaPixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID_SOUMISSIONCONFORT
-            const metaAccessToken = process.env.META_CONVERSION_ACCESS_TOKEN_SOUMISSIONCONFORT
-            const metaTestEventCode = process.env.META_TEST_EVENT_CODE_SOUMISSIONCONFORT
+            // .trim(): a trailing \n in the Vercel env value makes the CAPI POST
+            // hit graph.facebook.com/<id>%0A/events → Lead silently lost (incident
+            // 2026-06-03). Ids/tokens never carry meaningful edge whitespace.
+            const metaPixelId = (process.env.NEXT_PUBLIC_META_PIXEL_ID_SOUMISSIONCONFORT || '').trim()
+            const metaAccessToken = (process.env.META_CONVERSION_ACCESS_TOKEN_SOUMISSIONCONFORT || '').trim()
+            const metaTestEventCode = (process.env.META_TEST_EVENT_CODE_SOUMISSIONCONFORT || '').trim() || undefined
 
             const isPlaceholder = (v?: string) => !!v && /^X+$/i.test(v)
             const intentGateOk = leadData.userAnswers?.intent === 'qualified'

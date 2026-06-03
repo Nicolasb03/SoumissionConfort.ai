@@ -1,10 +1,18 @@
 import { initializeMetaConversionAPI } from './meta-conversion-api';
 
+// Trailing whitespace/newline in a Vercel env value silently kills Meta tracking:
+// a pixel id "<id>\n" makes browser fbq init/trackSingle target "<id>\n" ("Pixel
+// not found") AND the CAPI POST hit graph.facebook.com/<id>%0A/events → both
+// channels fail with nothing surfaced (incident 2026-06-03, dedicated pixel).
+// Ids/tokens/test-codes never carry meaningful edge whitespace, so always trim.
+const env = (v: string | undefined): string => (v ?? '').trim();
+const envOpt = (v: string | undefined): string | undefined => (v ?? '').trim() || undefined;
+
 // Meta Conversion API configuration
 export const META_CONFIG = {
-  PIXEL_ID: process.env.NEXT_PUBLIC_META_PIXEL_ID || '',
-  ACCESS_TOKEN: process.env.META_CONVERSION_ACCESS_TOKEN || '',
-  TEST_EVENT_CODE: process.env.META_TEST_EVENT_CODE || undefined,
+  PIXEL_ID: env(process.env.NEXT_PUBLIC_META_PIXEL_ID),
+  ACCESS_TOKEN: env(process.env.META_CONVERSION_ACCESS_TOKEN),
+  TEST_EVENT_CODE: envOpt(process.env.META_TEST_EVENT_CODE),
 };
 
 // Initialize Meta Conversion API on app startup
@@ -35,9 +43,9 @@ export function isMetaConfigured(): boolean {
 // shared pixel that keeps serving homepage/thermopompes/subventions/rapide).
 // ───────────────────────────────────────────────────────────────────────────
 export const META_CONFIG_SOUMISSIONCONFORT = {
-  PIXEL_ID: process.env.NEXT_PUBLIC_META_PIXEL_ID_SOUMISSIONCONFORT || '',
-  ACCESS_TOKEN: process.env.META_CONVERSION_ACCESS_TOKEN_SOUMISSIONCONFORT || '',
-  TEST_EVENT_CODE: process.env.META_TEST_EVENT_CODE_SOUMISSIONCONFORT || undefined,
+  PIXEL_ID: env(process.env.NEXT_PUBLIC_META_PIXEL_ID_SOUMISSIONCONFORT),
+  ACCESS_TOKEN: env(process.env.META_CONVERSION_ACCESS_TOKEN_SOUMISSIONCONFORT),
+  TEST_EVENT_CODE: envOpt(process.env.META_TEST_EVENT_CODE_SOUMISSIONCONFORT),
 };
 
 // True only when both id + token are real (not empty, not the XXXXXX
