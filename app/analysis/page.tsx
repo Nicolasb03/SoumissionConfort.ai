@@ -152,7 +152,7 @@ export default function AnalysisPage() {
       case "questionnaire":
         return { title: "Détails du Projet", subtitle: "Parlez-nous de vos besoins", icon: Clock }
       case "lead-capture":
-        return { title: "Connexion aux Entrepreneurs", subtitle: "Nous vous mettons en contact avec des professionnels", icon: CheckCircle }
+        return { title: "Préparation de votre estimation", subtitle: "Nous préparons votre estimé personnalisé", icon: CheckCircle }
       case "pricing":
         return { title: "Résultats de Prix", subtitle: "Votre estimation personnalisée", icon: CheckCircle }
       default:

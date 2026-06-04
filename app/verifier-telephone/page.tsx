@@ -268,7 +268,7 @@ export default function VerifierTelephonePage() {
                   {state === "sending"
                     ? "Envoi du code en cours..."
                     : state === "submitting"
-                    ? "Confirmation et envoi à nos entrepreneurs..."
+                    ? "Confirmation et envoi de votre demande..."
                     : (
                       <>
                         Un code de vérification a été envoyé par SMS au{" "}

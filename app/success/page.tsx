@@ -20,19 +20,19 @@ function SuccessContent() {
       num: "1",
       icon: CheckCircle2,
       title: "Validation de votre projet",
-      desc: "Un membre de notre équipe valide rapidement les détails pour assurer un bon appariement avec les entrepreneurs.",
+      desc: "Un membre de notre équipe valide rapidement les détails de votre demande d'estimation.",
     },
     {
       num: "2",
       icon: Users,
-      title: "Appariement avec 3 entrepreneurs",
-      desc: "Nous sélectionnons des entrepreneurs certifiés et bien notés disponibles dans votre secteur pour votre type de projet.",
+      title: "On vous recontacte",
+      desc: "Notre équipe vous contacte pour discuter de votre estimé et des prochaines étapes de votre projet d'isolation.",
     },
     {
       num: "3",
       icon: Star,
-      title: "Réception de soumissions détaillées",
-      desc: "Comparez les prix, les matériaux et les délais. Notre objectif est de vous aider à économiser et choisir en confiance.",
+      title: "Vous décidez de la suite",
+      desc: "Sans engagement. Notre objectif est de vous aider à démarrer votre projet d'isolation en confiance.",
     },
   ]
 
@@ -86,12 +86,12 @@ function SuccessContent() {
           <p className="font-serif-body text-[#aedee5] text-lg max-w-xl mx-auto mb-8">
             {isContractor
               ? "Notre équipe examinera votre demande et vous contactera dans les prochaines 24-48 heures."
-              : <>Nous contactons les meilleurs entrepreneurs de votre région. Vous recevrez jusqu'à{" "}<strong className="text-white">3 soumissions détaillées</strong>{" "}dans les prochaines 24 heures.</>}
+              : <>Notre équipe vous recontacte dans les prochaines{" "}<strong className="text-white">24 heures</strong>{" "}au sujet de votre estimation d'isolation.</>}
           </p>
 
           {/* Trust badges */}
           <div className="flex flex-wrap justify-center gap-3 mb-10">
-            {["🔒 100% confidentiel", "⚡ Réponse sous 24h", "🤝 Sans engagement", "⭐ Entrepreneurs vérifiés"].map((b) => (
+            {["🔒 100% confidentiel", "⚡ Réponse sous 24h", "🤝 Sans engagement", "⭐ Service québécois"].map((b) => (
               <span
                 key={b}
                 className="flex items-center gap-1 bg-white/10 border border-white/20 rounded-full px-3 py-1.5 font-serif-body text-sm font-medium"
@@ -165,7 +165,7 @@ function SuccessContent() {
           <p className="font-serif-body text-[#375371] text-sm mb-6">
             {isContractor
               ? "Assurez-vous que votre profil est complet et que vous êtes prêt à répondre rapidement aux demandes."
-              : "Préparez quelques photos et précisez vos préférences de matériaux pour accélérer l'obtention de soumissions précises."}
+              : "Préparez quelques photos et notez vos préférences de matériaux pour accélérer le traitement de votre estimation."}
           </p>
           <Link href="/">
             <button className="flex items-center gap-2 mx-auto bg-[#b9e15c] border-2 border-[#002042] text-[#002042] font-heading font-bold py-3 px-8 rounded-full shadow-[-2px_4px_0_0_#002042] hover:shadow-[-1px_2px_0_0_#002042] hover:translate-y-0.5 transition-all">

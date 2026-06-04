@@ -327,7 +327,7 @@ export function LeadCaptureForm({ roofData, v2Answers, onComplete }: LeadCapture
           </div>
           <div className="flex items-center gap-1.5 font-serif-body text-sm text-[#375371]">
             <CheckCircle className="w-4 h-4 text-[#002042]" />
-            <span>Entrepreneurs certifiés RBQ</span>
+            <span>Sans engagement</span>
           </div>
         </div>
       </div>
