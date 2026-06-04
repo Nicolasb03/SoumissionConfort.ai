@@ -11,13 +11,7 @@ import { isValidQuebecPhone } from "@/lib/phone"
 import { getCurrentUTMParameters, type UTMParameters } from "@/lib/utm-utils"
 import { buildV1AnswersFromV2, type V2Answers } from "@/lib/funnel-config"
 import { calculateInsulationPricing } from "@/lib/insulation-calculator"
-import { META_PIXEL_DEDIE } from "@/components/meta-pixel-router"
-
-declare global {
-  interface Window {
-    fbq: (...args: any[]) => void
-  }
-}
+import { fireBrowserLead, getMetaBrowserCookies } from "@/lib/meta-browser"
 
 export interface LeadData {
   firstName: string
@@ -123,6 +117,11 @@ export function LeadCaptureForm({ roofData, v2Answers, onComplete }: LeadCapture
       userAnswers: userAnswersPayload,
       pricingData,
       utmParams,
+      // Meta _fbp/_fbc cookies (set by fbevents, non-httpOnly) forwarded so the
+      // server CAPI Lead matches/dedups against the browser Lead (server can't
+      // read them). OTP path carries them too: this payload is stashed in
+      // sessionStorage and reposted by /verifier-telephone.
+      ...getMetaBrowserCookies(),
       // eventId stays top-level: /api/leads reads leadData.eventId for the CAPI
       // Lead, and /verifier-telephone reads pending.eventId for the browser
       // Lead → same id → Meta dedups browser↔CAPI (P0-3).
@@ -186,18 +185,15 @@ export function LeadCaptureForm({ roofData, v2Answers, onComplete }: LeadCapture
       // succeeds — qualified intent only, same eventId as the CAPI Lead, targeted
       // at the dedicated pixel (trackSingle). When OTP is on, this fires from
       // /verifier-telephone instead (we return before reaching here).
-      if (
-        v2Answers.intent === 'qualified' &&
-        typeof window !== 'undefined' &&
-        typeof window.fbq === 'function' &&
-        META_PIXEL_DEDIE &&
-        !/^X+$/i.test(META_PIXEL_DEDIE)
-      ) {
-        window.fbq('trackSingle', META_PIXEL_DEDIE, 'Lead', {
-          value: estimatedValue.toFixed(2),
-          currency: 'CAD',
-          service_type: 'isolation',
-        }, { eventID: eventId })
+      if (v2Answers.intent === 'qualified') {
+        fireBrowserLead({
+          email: formData.email,
+          phone: formData.phone,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          value: estimatedValue,
+          eventId,
+        })
       }
 
       onComplete(pricingData, leadDataForReturn, clientLeadId)

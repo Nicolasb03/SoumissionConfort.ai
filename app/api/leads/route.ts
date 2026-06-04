@@ -98,6 +98,21 @@ export async function POST(request: NextRequest) {
     const utmParams = leadData.utmParams || {}
     console.log('🏷️ LEADS API: UTM Parameters received:', utmParams)
 
+    // Meta CAPI advanced-matching extras (EMQ). fbp/fbc are the browser cookies
+    // (_fbp/_fbc) forwarded in the payload so the CAPI Lead matches/dedups against
+    // the browser Lead (the server can't read those cookies itself). If _fbc is
+    // absent but we captured an fbclid, rebuild it as fb.1.<seconds>.<fbclid>
+    // (timestamp is approximate but still improves matching). The email is reused
+    // as external_id (hashed inside trackLead).
+    const metaFbp: string | undefined =
+      typeof leadData.fbp === 'string' && leadData.fbp ? leadData.fbp : undefined
+    const metaFbc: string | undefined =
+      typeof leadData.fbc === 'string' && leadData.fbc
+        ? leadData.fbc
+        : utmParams.fbclid
+          ? `fb.1.${Math.floor(Date.now() / 1000)}.${utmParams.fbclid}`
+          : undefined
+
     // Lead ID: honor a client-supplied value when it matches our format
     // (the funnel needs the ID in the URL before /api/leads is called when
     // OTP_ENABLED=true). Otherwise generate one server-side.
@@ -336,6 +351,9 @@ export async function POST(request: NextRequest) {
                 userAgent,
                 sourceUrl: `${origin}/analysis`,
                 eventId: leadData.eventId || undefined,
+                fbp: metaFbp,
+                fbc: metaFbc,
+                externalId: leadData.email,
                 customData: { service_type: 'isolation' },
               })
               console.log('✅ LEADS API: Meta CAPI Lead sent (GHL branch, isolation, dedicated pixel)')
@@ -833,6 +851,9 @@ export async function POST(request: NextRequest) {
                 userAgent,
                 sourceUrl: `${origin}/analysis`,
                 eventId: leadData.eventId || undefined,
+                fbp: metaFbp,
+                fbc: metaFbc,
+                externalId: leadData.email,
                 customData: {
                   service_type: 'isolation'
                 }

@@ -1,3 +1,5 @@
+import { toMetaPhone } from './phone';
+
 interface MetaConversionEvent {
   event_name: string;
   event_id?: string;
@@ -12,6 +14,7 @@ interface MetaConversionEvent {
     client_user_agent?: string;
     fbc?: string; // Facebook click ID
     fbp?: string; // Facebook browser ID
+    external_id?: string; // stable id (hashed) — improves match quality
   };
   custom_data?: {
     content_type?: string;
@@ -172,6 +175,9 @@ export class MetaConversionAPI {
     userAgent?: string;
     sourceUrl?: string;
     eventId?: string;
+    fbp?: string;
+    fbc?: string;
+    externalId?: string;
     customData?: Record<string, any>;
   }) {
     try {
@@ -180,7 +186,13 @@ export class MetaConversionAPI {
       };
 
       if (leadData.phone) {
-        userData.ph = await hashData(leadData.phone);
+        // Hash the Meta-canonical phone (digits only, country code, no '+') — the
+        // EXACT string fbevents hashes client-side, so the browser AM hash and the
+        // CAPI hash match AND the value is in Meta's expected format. The E.164
+        // "+1..." would hash differently (the '+' survives hashData) and waste the
+        // phone signal. Skip ph entirely if no digits can be derived.
+        const ph = toMetaPhone(leadData.phone);
+        if (ph) userData.ph = await hashData(ph);
       }
       if (leadData.firstName) {
         userData.fn = await hashData(leadData.firstName);
@@ -188,7 +200,20 @@ export class MetaConversionAPI {
       if (leadData.lastName) {
         userData.ln = await hashData(leadData.lastName);
       }
-      
+
+      // fbp/fbc are sent RAW (never hashed) — they're the same cookie values the
+      // browser Lead already sends, so the two channels match/dedup. external_id
+      // is hashed (Meta convention); we use the email as the stable id.
+      if (leadData.fbp) {
+        userData.fbp = leadData.fbp;
+      }
+      if (leadData.fbc) {
+        userData.fbc = leadData.fbc;
+      }
+      if (leadData.externalId) {
+        userData.external_id = await hashData(leadData.externalId);
+      }
+
       // Add server-side client information
       if (leadData.clientIp) {
         userData.client_ip_address = leadData.clientIp;
@@ -205,7 +230,7 @@ export class MetaConversionAPI {
         user_data: userData,
         custom_data: {
           content_type: 'lead_form',
-          content_name: 'Roof Quote Request',
+          content_name: 'Estimation isolation',
           value: leadData.value || 0,
           currency: 'CAD',
           ...(leadData.customData || {})

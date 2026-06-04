@@ -52,6 +52,20 @@ export function normalizePhone(input: string | null | undefined): string | null 
 }
 
 /**
+ * Meta advanced-matching / Conversions API phone format: digits only, with the
+ * country code, NO '+' or symbols (e.g. "15145551234"). fbevents.js normalizes
+ * the in-clear phone the SAME way before hashing client-side, so feeding this
+ * exact string to BOTH the browser pixel and the CAPI yields identical hashes —
+ * the E.164 "+15145551234" would hash differently (the '+' survives) and the
+ * phone match signal is silently lost. Returns null when no digits can be derived.
+ */
+export function toMetaPhone(input: string | null | undefined): string | null {
+  const e164 = normalizePhone(input)
+  const digits = (e164 ?? (typeof input === 'string' ? input : '')).replace(/\D/g, '')
+  return digits || null
+}
+
+/**
  * Format for display: `(514) 555-1234`. Returns the input untouched if invalid.
  */
 export function formatPhoneForDisplay(input: string): string {
