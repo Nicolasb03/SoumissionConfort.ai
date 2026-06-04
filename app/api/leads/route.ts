@@ -101,16 +101,18 @@ export async function POST(request: NextRequest) {
     // Meta CAPI advanced-matching extras (EMQ). fbp/fbc are the browser cookies
     // (_fbp/_fbc) forwarded in the payload so the CAPI Lead matches/dedups against
     // the browser Lead (the server can't read those cookies itself). If _fbc is
-    // absent but we captured an fbclid, rebuild it as fb.1.<seconds>.<fbclid>
-    // (timestamp is approximate but still improves matching). The email is reused
-    // as external_id (hashed inside trackLead).
+    // absent but we captured an fbclid, rebuild it as fb.1.<ms>.<fbclid>. Meta's
+    // fbc format uses the creation time in MILLISECONDS (13 digits, e.g.
+    // fb.1.1554763741205.<fbclid>) — a seconds value is treated as malformed and
+    // dropped. The timestamp is approximate (POST time, not the real click) but
+    // still improves matching. The email is reused as external_id (hashed in trackLead).
     const metaFbp: string | undefined =
       typeof leadData.fbp === 'string' && leadData.fbp ? leadData.fbp : undefined
     const metaFbc: string | undefined =
       typeof leadData.fbc === 'string' && leadData.fbc
         ? leadData.fbc
         : utmParams.fbclid
-          ? `fb.1.${Math.floor(Date.now() / 1000)}.${utmParams.fbclid}`
+          ? `fb.1.${Date.now()}.${utmParams.fbclid}`
           : undefined
 
     // Lead ID: honor a client-supplied value when it matches our format
