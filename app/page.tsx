@@ -50,15 +50,15 @@ const faqItems = [
   },
   {
     q: "Qui est Soumission Confort ?",
-    a: "Soumission Confort est une plateforme québécoise qui connecte les propriétaires avec des entrepreneurs certifiés RBQ pour leurs projets d'isolation. Nous avons aidé plus de 5 000 familles à réisoler leur grenier.",
+    a: "Soumission Confort est une plateforme québécoise qui aide les propriétaires à obtenir une estimation claire pour leurs projets d'isolation d'entretoit. Plus de 5 000 familles ont démarré leur réisolation avec nous.",
   },
   {
-    q: "Est-ce que je suis obligé de faire affaire avec un entrepreneur de votre réseau ?",
-    a: "Non. Après avoir reçu votre estimé, vous êtes entièrement libre de décider si vous souhaitez être mis en contact avec nos entrepreneurs. Il n'y a aucune pression et aucune obligation.",
+    q: "Est-ce que l'estimation m'engage à quelque chose ?",
+    a: "Non. L'estimation est gratuite et sans engagement. Vous êtes entièrement libre de décider de la suite. Aucune pression, aucune obligation.",
   },
   {
-    q: "Est-ce que les entrepreneurs sont tous vérifiés et certifiés par la RBQ ?",
-    a: "Oui. Tous nos entrepreneurs sont certifiés RBQ et vérifiés à 360° par notre équipe. En plus de valider leur licence RBQ, nous analysons leurs avis Google et les rencontrons personnellement avant de les intégrer à notre réseau.",
+    q: "Combien coûte l'isolation de mon entretoit ?",
+    a: "Ça dépend de la superficie et de l'état actuel de votre isolation. Notre outil vous donne un estimé réaliste en quelques minutes, basé sur les prix du marché québécois de l'isolation.",
   },
 ]
 
@@ -189,7 +189,7 @@ export default function HomePage() {
                   </button>
                 </div>
                 <div className="flex flex-wrap items-center justify-center gap-5">
-                  {["Gratuit et sans obligation", "150+ entrepreneurs certifiés", "Plateforme sécurisée"].map((text) => (
+                  {["Gratuit et sans obligation", "Estimation en quelques minutes", "Plateforme sécurisée"].map((text) => (
                     <div key={text} className="flex items-center gap-1.5">
                       <img src="/images/icon-check.svg" alt="" className="w-5 h-5" />
                       <span className="font-serif-body text-[#10002c] text-[15px] tracking-tight whitespace-nowrap">{text}</span>
@@ -210,7 +210,7 @@ export default function HomePage() {
               Comment ça fonctionne ?
             </h2>
             <p className="font-serif-body font-semibold text-[18px] text-[#375371] leading-[1.2] tracking-tight max-w-3xl">
-              Soumission Confort simplifie le démarrage des projets d'isolation des québecois grâce à un outil d'estimation basé sur l'intelligence artificielle et l'expérience d'un réseau de plus de 150 entrepreneurs certifiés par la RBQ.
+              Soumission Confort simplifie le démarrage des projets d'isolation des québecois grâce à un outil d'estimation basé sur l'intelligence artificielle et les prix réels du marché québécois de l'isolation.
             </p>
           </div>
 
@@ -228,13 +228,13 @@ export default function HomePage() {
               },
               {
                 img: "/images/card-documents.png",
-                title: "Vous choisissez si on vous accompagne dans votre recherche de soumission",
-                desc: "Aucune obligation. Vous décidez si vous souhaitez être mis en contact avec nos entrepreneurs certifiés.",
+                title: "Vous recevez votre estimation personnalisée",
+                desc: "Un estimé clair pour votre projet d'isolation, sans engagement.",
               },
               {
                 img: "/images/card-contractors.png",
-                title: "On trouve 3 soumissions d'entrepreneurs certifiés pour vous !",
-                desc: "Recevez jusqu'à 3 soumissions détaillées d'entrepreneurs RBQ vérifiés dans votre région.",
+                title: "On vous recontacte pour la suite",
+                desc: "Si vous le souhaitez, notre équipe vous accompagne pour passer de l'estimé au projet réalisé.",
               },
             ].map(({ img, title, desc }) => (
               <div key={title} className="bg-white border border-[#f2f2f7] rounded-[20px] p-8 shadow-md flex flex-col gap-6">
@@ -273,12 +273,12 @@ export default function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
             {[
               {
-                title: "Les entrepreneurs nous paient pour les mettre en contact avec des propriétaires qui veulent faire leurs travaux.",
-                body: "Aucune pression. On mise sur la qualité de notre service avant tout.\n\nNotre meilleure façon de réussir, c'est de vous trouver l'entrepreneur idéal pour votre projet.",
+                title: "L'estimation est 100% gratuite et sans engagement.",
+                body: "Aucune pression. On mise sur la qualité de notre service avant tout.\n\nNotre but : vous donner l'heure juste sur votre projet d'isolation et vous accompagner seulement si vous le voulez.",
               },
               {
-                title: "Tous nos entrepreneurs sont certifiés RBQ et vérifiés à 360° par notre équipe.",
-                body: "Pour mériter la confiance de nos clients, nous sélectionnons nos entrepreneurs avec rigueur.\n\nEn plus de valider leur licence RBQ, nous analysons leurs avis Google et rencontrons personnellement chacun d'eux avant de les intégrer à notre réseau.",
+                title: "Une estimation fiable, basée sur les vrais prix du marché.",
+                body: "Pour mériter votre confiance, on s'appuie sur les prix réels du marché québécois et les caractéristiques de votre maison.\n\nVous obtenez un estimé clair pour démarrer votre projet d'isolation en toute transparence.",
               },
             ].map(({ title, body }) => (
               <div key={title} className="bg-white border border-[#f2f2f7] rounded-[20px] p-8 shadow-md flex flex-col gap-4">
@@ -293,7 +293,7 @@ export default function HomePage() {
           <div className="bg-[#aedee5] rounded-[20px] shadow-md px-8 py-12 w-full flex flex-wrap gap-12 items-center justify-center">
             {[
               { value: "5 000 +", label: "Projets d'isolation" },
-              { value: "150 +", label: "Entrepreneurs vérifiés" },
+              { value: "60 sec", label: "Pour votre estimé" },
               { value: "40%", label: "Économie moyenne" },
             ].map(({ value, label }) => (
               <div key={label} className="flex flex-col items-center gap-2 min-w-[140px]">

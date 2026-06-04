@@ -5,13 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { CheckCircle, Loader2 } from "lucide-react"
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
-import { META_PIXEL_DEDIE } from "@/components/meta-pixel-router"
-
-declare global {
-  interface Window {
-    fbq: (...args: any[]) => void
-  }
-}
+import { fireBrowserLead } from "@/lib/meta-browser"
 
 type State = "sending" | "pending" | "confirming" | "submitting" | "verified" | "error"
 
@@ -201,22 +195,23 @@ export default function VerifierTelephonePage() {
           if (
             pending?.meta?.intent === "qualified" &&
             typeof pending.eventId === "string" &&
-            pending.eventId &&
-            typeof window !== "undefined" &&
-            typeof window.fbq === "function" &&
-            META_PIXEL_DEDIE &&
-            !/^X+$/i.test(META_PIXEL_DEDIE)
+            pending.eventId
           ) {
-            // Fire the browser Lead with the SAME eventId the CAPI Lead
-            // (/api/leads) uses → Meta dedups browser↔CAPI to ONE Lead. A fresh
-            // random id would NOT match the CAPI id and double-count. If eventId
-            // is missing (corrupt/stale sessionStorage), skip the browser pixel:
-            // the CAPI Lead still fires → counted once, never dropped.
-            window.fbq("trackSingle", META_PIXEL_DEDIE, "Lead", {
-              value: Number(pending.meta.estimatedValue || 0).toFixed(2),
-              currency: "CAD",
-              service_type: "isolation",
-            }, { eventID: pending.eventId })
+            // Browser Lead + advanced matching (em/ph/fn/ln from the stashed
+            // payload), fired with the SAME eventId the CAPI Lead (/api/leads)
+            // uses → Meta dedups browser↔CAPI to ONE Lead. A fresh random id
+            // would NOT match the CAPI id and double-count. If eventId is missing
+            // (corrupt/stale sessionStorage), skip: the CAPI Lead still fires →
+            // counted once, never dropped. The pixel-id/placeholder guard lives
+            // in fireBrowserLead.
+            fireBrowserLead({
+              email: pending.email,
+              phone: pending.phone,
+              firstName: pending.firstName,
+              lastName: pending.lastName,
+              value: Number(pending.meta.estimatedValue || 0),
+              eventId: pending.eventId,
+            })
           }
         }
       } catch (err) {
@@ -268,7 +263,7 @@ export default function VerifierTelephonePage() {
                   {state === "sending"
                     ? "Envoi du code en cours..."
                     : state === "submitting"
-                    ? "Confirmation et envoi à nos entrepreneurs..."
+                    ? "Confirmation et envoi de votre demande..."
                     : (
                       <>
                         Un code de vérification a été envoyé par SMS au{" "}

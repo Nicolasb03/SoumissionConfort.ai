@@ -46,7 +46,7 @@ export function InsulationResults({ roofData, userAnswers, leadData, onComplete 
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-[#aedee5] border-t-[#002042] rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="font-serif-body text-[#375371]">Calcul de votre soumission personnalisée...</p>
+          <p className="font-serif-body text-[#375371]">Calcul de votre estimation personnalisée...</p>
         </div>
       </div>
     )
@@ -63,7 +63,7 @@ export function InsulationResults({ roofData, userAnswers, leadData, onComplete 
           <span className="font-serif-body font-semibold text-[#002042] text-sm">Analyse complétée</span>
         </div>
         <h1 className="font-heading text-3xl md:text-5xl font-bold text-[#10002c] mb-4">
-          Votre soumission d'isolation personnalisée
+          Votre estimation d'isolation personnalisée
         </h1>
         <p className="font-serif-body text-lg text-[#375371] max-w-2xl mx-auto">
           Basée sur {results.adjustedArea} pi² et vos besoins spécifiques
@@ -110,12 +110,12 @@ export function InsulationResults({ roofData, userAnswers, leadData, onComplete 
             }}
             className="w-full bg-[#b9e15c] border-2 border-white text-[#002042] font-heading font-bold py-5 px-8 rounded-full transition-all duration-300 shadow-[-2px_4px_0_0_rgba(255,255,255,0.4)] hover:shadow-[-1px_2px_0_0_rgba(255,255,255,0.4)] hover:translate-y-0.5 text-lg mb-4"
           >
-            <span className="hidden md:inline">Obtenir une soumission plus précise par des entrepreneurs</span>
-            <span className="md:hidden">Obtenir mes 3 soumissions gratuites</span>
+            <span className="hidden md:inline">Être recontacté pour mon projet</span>
+            <span className="md:hidden">Être recontacté pour mon projet</span>
           </button>
 
           <p className="font-serif-body text-center text-sm text-[#aedee5]">
-            ⚡ Obtenez des prix exacts en 24h • 100% gratuit
+            ⚡ Réponse sous 24h • 100% gratuit
           </p>
 
           <div className="mt-6 p-4 bg-white/10 rounded-xl border border-white/20">
