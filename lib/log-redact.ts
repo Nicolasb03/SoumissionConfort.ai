@@ -21,7 +21,7 @@ export function leadLogSummary(lead: unknown): Record<string, unknown> {
     intent: l.userAnswers?.intent ?? l.meta?.intent,
     hasEmail: !!(l.email ?? contact.email),
     hasPhone: !!(l.phone ?? contact.phone),
-    hasName: !!(l.firstName ?? l.lastName ?? contact.firstName ?? contact.name),
+    hasName: !!(l.firstName ?? l.lastName ?? contact.firstName ?? contact.lastName ?? contact.name),
     hasAddress: !!(l.address ?? property.address ?? l.roofData),
   }
 }
