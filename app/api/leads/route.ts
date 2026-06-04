@@ -3,6 +3,7 @@ import { initializeMetaConversionAPI } from "@/lib/meta-conversion-api"
 import { isGHLEnabled, postLeadToGHL, type LeadVertical, type NormalizedLead } from "@/lib/ghl-client"
 import { isValidQuebecPhone, normalizePhone } from "@/lib/phone"
 import { verifyOtpToken } from "@/lib/otp-token"
+import { leadLogSummary } from "@/lib/log-redact"
 
 console.log('🔥🔥🔥 LEADS API FILE LOADED - THIS SHOULD SHOW ON SERVER START 🔥🔥🔥')
 
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const leadData = await request.json()
-    console.log('🔥 LEADS API: Received lead data:', JSON.stringify(leadData, null, 2))
+    console.log('🔥 LEADS API: lead received', leadLogSummary(leadData))
 
     // ────────────────────────────────────────────────────────────────────
     // Phone validation + OTP token check (fail-closed before CRM writes)
@@ -343,7 +344,7 @@ export async function POST(request: NextRequest) {
               const stdMax = leadData.pricingData?.ranges?.standard?.totalCost?.max || 0
               const estimatedValue = (stdMin + stdMax) / 2
               const origin = request.headers.get('origin') || 'https://www.soumissionconfort.com'
-              await metaAPI.trackLead({
+              const metaResult = await metaAPI.trackLead({
                 email: leadData.email,
                 phone: leadData.phone,
                 firstName: leadData.firstName,
@@ -358,7 +359,14 @@ export async function POST(request: NextRequest) {
                 externalId: leadData.email,
                 customData: { service_type: 'isolation' },
               })
-              console.log('✅ LEADS API: Meta CAPI Lead sent (GHL branch, isolation, dedicated pixel)')
+              // Inspect the CAPI result: a silent failure (expired token, pixel not
+              // found) otherwise leaves the request 200 + GHL contact created but ZERO
+              // Meta event, invisibly (incident 2026-06-03 pattern).
+              if (!metaResult?.success) {
+                console.error('🚨 LEADS API: Meta CAPI Lead FAILED (GHL branch) — tracking lost', { eventId: leadData.eventId || 'none', error: metaResult?.error })
+              } else {
+                console.log('✅ LEADS API: Meta CAPI Lead sent (GHL branch, isolation, dedicated pixel)')
+              }
             } else if (isTestLead) {
               console.log('[leads] skip Meta CAPI Lead — isTest=true')
             } else if (!intentGateOk) {
@@ -610,12 +618,10 @@ export async function POST(request: NextRequest) {
             source: "soumission-toiture-ai",
           }
       
-      console.log('🔍 LEADS API: EXACT WEBHOOK PAYLOAD BEING SENT:')
-      console.log('📦 LEADS API: Full payload:', JSON.stringify(webhookPayload, null, 2))
-      console.log('📏 LEADS API: Payload size:', JSON.stringify(webhookPayload).length, 'characters')
-      console.log('🎯 LEADS API: Contact info:', webhookPayload.contact)
-      console.log('🏠 LEADS API: Property info:', webhookPayload.property)
-      console.log('📋 LEADS API: Project details:', webhookPayload.projectDetails)
+      console.log('📦 LEADS API: webhook payload prepared', {
+        ...leadLogSummary(webhookPayload),
+        size: JSON.stringify(webhookPayload).length,
+      })
       console.log('💰 LEADS API: Pricing info:', webhookPayload.pricing)
       console.log('🏷️ LEADS API: UTM Parameters:', webhookPayload.utmParams)
       
@@ -745,7 +751,7 @@ export async function POST(request: NextRequest) {
             "Webhook Type (AL)": "initial_contact"
           }
       
-      console.log('📦 LEADS API: Make.com formatted payload:', JSON.stringify(makeComPayload, null, 2))
+      console.log('📦 LEADS API: Make.com payload prepared', { leadId, size: JSON.stringify(makeComPayload).length })
       
       // Send to all webhook URLs
       const webhookPromises = webhookUrls.map(async (url, index) => {
@@ -843,7 +849,7 @@ export async function POST(request: NextRequest) {
 
               console.log(`📊 LEADS API: Sending server-side Meta Lead event for isolation (eventId: ${leadData.eventId || 'none'}, dedicated pixel)`)
 
-              await metaAPI.trackLead({
+              const metaResult = await metaAPI.trackLead({
                 email: leadData.email,
                 phone: leadData.phone,
                 firstName: leadData.firstName,
@@ -861,7 +867,11 @@ export async function POST(request: NextRequest) {
                 }
               })
 
-              console.log('✅ LEADS API: Server-side Meta Lead event sent successfully for isolation')
+              if (!metaResult?.success) {
+                console.error('🚨 LEADS API: Meta CAPI Lead FAILED (legacy path) — tracking lost', { eventId: leadData.eventId || 'none', error: metaResult?.error })
+              } else {
+                console.log('✅ LEADS API: Server-side Meta Lead event sent successfully for isolation')
+              }
             } else if (isTestLead) {
               console.log('[leads] skip Meta CAPI Lead — isTest=true (legacy path)')
             } else if (!intentGateOk) {
