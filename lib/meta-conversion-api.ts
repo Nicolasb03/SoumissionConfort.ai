@@ -112,12 +112,19 @@ export class MetaConversionAPI {
     clientIp?: string
     userAgent?: string
     sourceUrl?: string
+    fbp?: string
+    fbc?: string
   } = {}) {
     // Prefer explicit server-passed client info; fall back to browser cookies
     // (_fbp/_fbc) + UA when called client-side.
     const userData: NonNullable<MetaConversionEvent['user_data']> = { ...getClientInfo() };
     if (data.clientIp) userData.client_ip_address = data.clientIp;
     if (data.userAgent) userData.client_user_agent = data.userAgent;
+    // fbp/fbc forwarded from the browser (getClientInfo() returns {} server-side, so
+    // without this the CAPI ViewContent could only match on ip+ua). Raw, never hashed —
+    // same browser-id signal the matching browser ViewContent already carries.
+    if (data.fbp) userData.fbp = data.fbp;
+    if (data.fbc) userData.fbc = data.fbc;
 
     const event: MetaConversionEvent = {
       event_name: 'ViewContent',
@@ -126,9 +133,11 @@ export class MetaConversionAPI {
       action_source: 'website',
       user_data: userData,
       custom_data: {
-        content_type: data.contentType || 'website',
+        // content_category (not content_type) to mirror the browser ViewContent
+        // (user-questionnaire-wizard.tsx) — same field on both channels. No `value`
+        // on a ViewContent, so currency is dropped (it was cosmetic-only).
+        content_category: data.contentType || 'isolation',
         content_name: data.contentName || 'Homepage',
-        currency: 'CAD',
         ...(data.searchString ? { search_string: data.searchString } : {}),
       },
       event_source_url: data.sourceUrl

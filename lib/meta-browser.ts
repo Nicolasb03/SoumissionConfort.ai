@@ -46,6 +46,10 @@ export function fireBrowserLead(params: {
   if (fn) am.fn = fn
   const ln = params.lastName?.trim().toLowerCase()
   if (ln) am.ln = ln
+  // external_id mirrors the CAPI Lead (route.ts sends external_id = sha256(email)).
+  // Passed in clear — fbevents hashes it client-side — so the browser event carries
+  // the SAME matching key as its CAPI dedup partner.
+  if (em) am.external_id = em
 
   if (Object.keys(am).length > 0) {
     window.fbq('init', META_PIXEL_DEDIE, am)

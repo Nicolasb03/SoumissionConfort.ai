@@ -14,6 +14,7 @@ import {
   type IntentCode,
 } from "@/lib/funnel-config"
 import { META_PIXEL_DEDIE } from "@/components/meta-pixel-router"
+import { getMetaBrowserCookies } from "@/lib/meta-browser"
 
 declare global {
   interface Window {
@@ -89,6 +90,9 @@ export function UserQuestionnaire({ roofData: _roofData, onComplete }: UserQuest
       body: JSON.stringify({
         eventId,
         sourceUrl: typeof window !== 'undefined' ? window.location.href : undefined,
+        // Forward _fbp/_fbc so the CAPI ViewContent matches on the browser id, not
+        // just ip+ua (getClientInfo() can't read cookies server-side).
+        ...getMetaBrowserCookies(),
       }),
       keepalive: true,
     }).catch(err => console.warn('ViewContent CAPI failed', err))

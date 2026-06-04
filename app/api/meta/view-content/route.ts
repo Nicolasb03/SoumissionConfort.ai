@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { eventId, sourceUrl, address } = await request.json()
+    const { eventId, sourceUrl, address, fbp, fbc } = await request.json()
     const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]
       || request.headers.get('x-real-ip')
       || 'unknown'
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       META_CONFIG_SOUMISSIONCONFORT.TEST_EVENT_CODE,
     )
 
-    await metaAPI.trackViewContent({
+    const result = await metaAPI.trackViewContent({
       eventId,
       sourceUrl,
       clientIp,
@@ -38,7 +38,14 @@ export async function POST(request: NextRequest) {
       contentName: 'analysis-wizard-v2',
       contentType: 'isolation',
       searchString: address,
+      fbp,
+      fbc,
     })
+    // Surface a silent CAPI failure (expired token, pixel not found) instead of
+    // swallowing it — otherwise ViewContent dies invisibly (incident 2026-06-03).
+    if (!result?.success) {
+      console.error('[view-content] Meta CAPI ViewContent FAILED', { eventId, error: result?.error })
+    }
 
     return NextResponse.json({ ok: true })
   } catch (err) {
